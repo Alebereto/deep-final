@@ -12,7 +12,7 @@ from network import Unet, Discriminator, Loss
 from logger import Logger
 
 
-class Colorer(nn.Module):
+class Painter(nn.Module):
 	def __init__(self, hyparams=None, g_params=None, d_params=None, load_path=None):
 
 
