@@ -1,0 +1,4 @@
+# ignore images
+data/images/*.jpg
+
+*.jpg
