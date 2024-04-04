@@ -40,7 +40,7 @@ class UnetUp(nn.Module):
 
     def forward(self, x1, x2):
         x1 = self.upConv(x1)
-        x = torch.cat([x2, x1], dim=1)
+        x = torch.cat([x2, x1], dim=0)
         return self.conv(x)
 
 class UnetOut(nn.Module):
