@@ -8,7 +8,7 @@ from tqdm.notebook import tqdm
 import os
 from shutil import copyfile
 
-from network import Unet, Discriminator, Loss
+from network import Unet, Discriminator, GANLoss
 from logger import Logger
 
 
@@ -21,7 +21,7 @@ class Painter(nn.Module):
 		self.generator = Unet(g_params)
 		self.discriminator = Discriminator(d_params)
 
-		self.gan_criterion = Loss()
+		self.gan_criterion = GANLoss()
 		self.l1_criterion = nn.L1Loss()
 
 		self.optimizer_g = torch.optim.Adam(self.generator.parameters(), lr=hyparams.lr_g)
@@ -32,17 +32,22 @@ class Painter(nn.Module):
 		self.generator.train()
 		self.discriminator.train()
 
-		for l_batch, ab_batch in tqdm(trainloader):	# Note: tdqm is a wrapper that shows progress (didnt try it yet)
+		for l_bat, ab_bat in tqdm(trainloader):	# Note: tdqm is a wrapper that shows progress (didnt try it yet)
 
 			# set data to device
-			l_batch = l_batch.to(self.device)
-			ab_batch = ab_batch.to(self.device)
+			l_bat = l_bat.to(self.device)
+			ab_bat = ab_bat.to(self.device)
+
+			real_image_bat = torch.cat(l_bat, fake_ab_bat, dim=0)
 
 			self.optimizer_g.zero_grad()
 
 			# forward
 			# ?????????
-			fake_ab = self.generator(l_batch)
+			fake_ab_bat = self.generator(l_bat)
+			fake_image_bat = torch.cat(l_bat, fake_ab_bat, dim=0)
+			preds = self.discriminator(fake_image_bat)
+			loss_d = self.gan_criterion(preds, real_data=False)
 			# backwards
 			# ????????
 
@@ -52,6 +57,9 @@ class Painter(nn.Module):
 			# if (self.global_batch % 30) == 0:
 			# 	print(f"batch {self.global_batch:>4d}, loss = {loss.item():.4f}")
 
+
+	def backward_generator(self):
+		return None
 
 	def test_model(self, testloader, prints=True):
 		pass

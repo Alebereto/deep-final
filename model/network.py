@@ -22,10 +22,13 @@ class Discriminator(nn.Module):
 		pass
 
 
-class Loss():
+class GANLoss():
 	def __init__(self) -> None:
-		pass
+		self.loss_func = nn.MSELoss()
 	
-	def __call__():
-		return None
+	def __call__(self, pred, real_data: bool):
+		if real_data: label = 1.
+		else: label = 0.
+		loss = self.loss_func(pred, label)
+		return loss
 
