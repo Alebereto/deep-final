@@ -21,12 +21,16 @@ class Discriminator(nn.Module):
 	def forward(self, x):
 		pass
 
+	def set_gradients(self, grad: bool):
+		for p in self.parameters():
+			p.requires_grad = grad
+
 
 class GANLoss():
 	def __init__(self) -> None:
 		self.loss_func = nn.MSELoss()
 	
-	def __call__(self, pred, real_data: bool):
+	def __call__(self, pred, real_data: bool) -> torch.Tensor:
 		if real_data: label = 1.
 		else: label = 0.
 		loss = self.loss_func(pred, label)
