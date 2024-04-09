@@ -19,8 +19,8 @@ class ImagesDataset(Dataset):
 		return len(self.paths)
 
 	def __getitem__(self, idx) -> tuple[torch.Tensor, torch.Tensor]:
-		""" Returns normalized (-1 to 1) L channel with shape [1,:,:],
-			and normalized (-1 to 1) ab channels with shape [2,:,:] """
+		""" Returns normalized (-1 to 1) L channel with shape [1,H,W],
+			and normalized (-1 to 1) ab channels with shape [2,H,W] """
 
 		image = imread(self.paths[idx])	# load image as rgb
 		# TODO: maybe add noise if train dataset
@@ -45,4 +45,15 @@ def create_datasets(data_path: str, train_size: int, seed=None) -> tuple[ImagesD
 	train_paths, test_paths = paths[indeces[:train_size]], paths[indeces[train_size:]]
 
 	return ImagesDataset(train_paths), ImagesDataset(test_paths)
+
+def tensor_to_image(tensor:torch.Tensor) -> np.ndarray:
+	""" gets lab image as tensor, returns rgb image as numpy array """
+
+	lab_image = tensor.permute(1,2,0).numpy()
+	return lab2rgb(lab_image)
+
+def gray_tensor_to_image(tensor:torch.Tensor) -> np.ndarray:
+	""" gets grayscale image as tensor, returns grayscale image as numpy array """
+
+	return tensor.numpy()[0]
 
