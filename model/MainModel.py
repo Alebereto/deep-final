@@ -93,7 +93,6 @@ class Painter(nn.Module):
 			real_images = torch.cat(l_batch, ab_batch, dim=1)
 			fake_ab_batch = self.generator(l_batch)
 			fake_images = torch.cat(l_batch, fake_ab_batch, dim=1)
-
 			
 			sum_d_loss += self.optimize_discriminator(real_images, fake_images.detach())
 			sum_g_loss += self.optimize_generator(fake_images)

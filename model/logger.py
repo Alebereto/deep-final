@@ -45,7 +45,7 @@ class Logger():
 			self.recent_images.append((gray, real_images[i], fake_images[i]))
 
 	def plot_performence(self, show=True) -> None:
-		x = np.arange(1, len(self.train_acc) + 1)
+		x = np.arange(1, len(self.g_train_loss) + 1)
 
 		plt.subplot(121)
 		plt.plot(x, self.g_train_loss, color='c', label='Train loss')
