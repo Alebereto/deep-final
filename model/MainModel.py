@@ -100,7 +100,7 @@ class Painter(nn.Module):
 
 		return sum_g_loss / len(trainloader), sum_d_loss / len(trainloader)
 
-	def test_model(self, testloader, prints=False) -> tuple[float,float]:
+	def test_model(self, testloader) -> tuple[float,float]:
 		""" Tests model on testset, returns average loss for generator and discriminator """
 
 		self.generator.eval()
@@ -114,9 +114,8 @@ class Painter(nn.Module):
 				fake_ab_batch = self.generator(l_batch)
 				fake_images = torch.cat(l_batch, fake_ab_batch, dim=1)
 
-				# add random images from batch to logger
-				indeces = np.random.choice(len(l_batch), size=6, replace=False)
-				self.logger.add_images(real_images[indeces], fake_images[indeces])
+				# save some images from batch to logger
+				self.logger.add_images(real_images, fake_images)
 
 				# TODO: get losses and add to sum
 				sum_g_loss += 0

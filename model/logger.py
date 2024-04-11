@@ -34,6 +34,12 @@ class Logger():
 		self.d_test_loss.append(test_loss[1])
 
 	def add_images(self, real_images, fake_images) -> None:
+		""" gets batch of real images and fake images from test, saves some of them """
+
+		# get some images from batch
+		indeces = np.random.choice(len(real_images), size=5, replace=False)
+		real_images, fake_images = real_images[indeces], fake_images[indeces]
+
 		for i in range(len(real_images)):
 			gray = real_images[i][0]
 			self.recent_images.append((gray, real_images[i], fake_images[i]))
