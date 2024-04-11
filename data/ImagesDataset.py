@@ -7,7 +7,7 @@ from torchvision import transforms
 from glob import glob
 import os
 
-from cv2 import imread
+from PIL import Image
 from skimage.color import rgb2lab, lab2rgb
 
 
@@ -22,7 +22,7 @@ class ImagesDataset(Dataset):
 		""" Returns normalized (-1 to 1) L channel with shape [1,H,W],
 			and normalized (-1 to 1) ab channels with shape [2,H,W] """
 
-		image = imread(self.paths[idx])	# load image as rgb
+		image = np.array(Image.open(self.paths[idx]).convert("RGB"))
 		# TODO: maybe add noise if train dataset
 		# TODO: resize image to be uniform shape
 		image_lab = rgb2lab(image).astype(np.float32)	# convert to lab (and lower from float64 to float32)
