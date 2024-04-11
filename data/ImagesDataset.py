@@ -6,6 +6,7 @@ from torchvision import transforms
 
 from glob import glob
 import os
+import random
 
 from PIL import Image
 from skimage.color import rgb2lab, lab2rgb
@@ -34,15 +35,15 @@ class ImagesDataset(Dataset):
 		return l, ab
 
 
-def create_datasets(data_path: str, train_size: int, seed=None) -> tuple[ImagesDataset, ImagesDataset]:
-	""" Returns train and test datasets, split with train_size """
+def create_datasets(data_path: str, train_size: int, test_size: int, seed=None) -> tuple[ImagesDataset, ImagesDataset]:
+	""" Returns train and test datasets """
 
-	paths = glob(os.path.join(data_path, '*.jpg'))	# get paths to all images (jpg)
-	assert train_size < len(paths), "Train size too big (no test set)"
+	paths = glob(os.path.join(data_path, '**\*.jpg'))	# get paths to all images (jpg)
+	assert train_size + test_size < len(paths), "Not enough data for specified sizes"
 
-	if seed is not None: np.random.seed(seed)
-	indeces = np.random.permutation(len(paths))
-	train_paths, test_paths = paths[indeces[:train_size]], paths[indeces[train_size:]]
+	if seed is not None: random.seed(seed)
+	sub_paths = random.choices(paths, k=(train_size + test_size))
+	train_paths, test_paths = sub_paths[:train_size], sub_paths[train_size:]
 
 	return ImagesDataset(train_paths), ImagesDataset(test_paths)
 
