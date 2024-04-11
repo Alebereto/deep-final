@@ -23,12 +23,6 @@ class Logger():
 		
 		self.epochs_trained = 0
 
-	def after_batch(self, something):
-		""" Update values after batch """
-
-		# maybe loss or something
-		pass
-
 	def after_epoch(self, train_loss, test_loss) -> None:
 		""" Update values after epoch """
 
