@@ -1,17 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import numpy as np
 
-
-class Unet(nn.Module):
-	def __init__(self, params) -> None:
-		super(Unet, self).__init__()
-		pass
-
-	def forward(self, x):
-		pass
-	
 
 class Discriminator(nn.Module):
 	def __init__(self, params) -> None:
