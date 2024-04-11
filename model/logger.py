@@ -10,11 +10,9 @@ class Logger():
 	""" Class containing information of model, such as layer dimensions
 	 	or training stats. Also has functions for plots and debugging. """
 
-	def __init__(self, name, hyparams, g_params, d_params) -> None:
+	def __init__(self, name, hyparams) -> None:
 		self.name = name
 		self.hyparams = hyparams
-		self.g_params = g_params
-		self.d_params = d_params
 
 		self.g_test_loss, self.g_train_loss = list(), list()
 		self.d_test_loss, self.d_train_loss = list(), list()

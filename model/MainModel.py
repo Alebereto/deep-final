@@ -19,6 +19,8 @@ from data.ImagesDataset import tensor_to_image
 SAVE_PATH = "results"
 
 class Painter(nn.Module):
+	""" GAN architecture with Unet generator """
+
 	def __init__(self, name:str, hyparams=None, load=False, device=None):
 		self.name = name
 		self.device = device
@@ -34,7 +36,6 @@ class Painter(nn.Module):
 			self.discriminator = Discriminator().to(self.device)
 
 			self.pre_optimizer = torch.optim.Adam(self.generator.parameters(), lr=hyparams.lr_pre)
-
 			self.optimizer_g = torch.optim.Adam(self.generator.parameters(), lr=hyparams.lr_g)
 			self.optimizer_d = torch.optim.Adam(self.discriminator.parameters(), lr=hyparams.lr_d)
 
@@ -154,9 +155,9 @@ class Painter(nn.Module):
 		logger, g_weights, d_weights = torch.load(os.path.join(model_path, 'save_data.pt'))
 		self.logger = logger
 
-		self.generator = Unet(logger.g_params).to(self.device)
+		self.generator = Unet().to(self.device)
 		self.generator.load_state_dict(g_weights)
-		self.discriminator = Discriminator(logger.d_params).to(self.device)
+		self.discriminator = Discriminator().to(self.device)
 		self.discriminator.load_state_dict(d_weights)
 
 		self.pre_optimizer = torch.optim.Adam(self.generator.parameters(), lr=logger.hyparams.lr_pre)
