@@ -8,7 +8,9 @@ from tqdm.notebook import tqdm
 import os
 from shutil import copyfile
 
-from network import Unet, Discriminator, GANLoss
+from Discriminator import Discriminator
+from GANLoss import GANLoss
+from Unet import Unet
 from logger import Logger
 
 from data.ImagesDataset import tensor_to_image
@@ -17,18 +19,21 @@ from data.ImagesDataset import tensor_to_image
 SAVE_PATH = "results"
 
 class Painter(nn.Module):
-	def __init__(self, name:str, hyparams=None, g_params=None, d_params=None, load=False):
+	def __init__(self, name:str, hyparams=None, load=False, device=None):
 		self.name = name
+		self.device = device
 
 		self.gan_criterion = GANLoss()
-		# self.l1_criterion = nn.L1Loss()
+		self.l1_criterion = nn.L1Loss()
 
 		if load: self.load()
 		else:
-			self.logger = Logger(name, hyparams, g_params, d_params)
+			self.logger = Logger(name, hyparams)
 
-			self.generator = Unet(g_params)
-			self.discriminator = Discriminator(d_params)
+			self.generator = Unet().to(self.device)
+			self.discriminator = Discriminator().to(self.device)
+
+			self.pre_optimizer = torch.optim.Adam(self.generator.parameters(), lr=hyparams.lr_pre)
 
 			self.optimizer_g = torch.optim.Adam(self.generator.parameters(), lr=hyparams.lr_g)
 			self.optimizer_d = torch.optim.Adam(self.discriminator.parameters(), lr=hyparams.lr_d)
@@ -37,7 +42,7 @@ class Painter(nn.Module):
 		""" Gets grayscale image, returns painted image """
 		
 		self.generator.eval()
-		gray_tensor = torch.tensor([gray_image], dtype=torch.float32)
+		gray_tensor = torch.tensor([gray_image], dtype=torch.float32, device=self.device)
 		lab_image = torch.cat(gray_tensor, self.generator(gray_tensor), dim=0)
 		return tensor_to_image(lab_image)
 
@@ -85,10 +90,6 @@ class Painter(nn.Module):
 
 		for l_batch, ab_batch in tqdm(trainloader):	# Note: tdqm is a wrapper that shows progress (didnt try it yet)
 
-			# set data to device
-			l_batch = l_batch.to(self.device)
-			ab_batch = ab_batch.to(self.device)
-
 			# get real and fake images
 			real_images = torch.cat(l_batch, ab_batch, dim=1)
 			fake_ab_batch = self.generator(l_batch)
@@ -122,6 +123,21 @@ class Painter(nn.Module):
 
 		return sum_g_loss / len(testloader), sum_d_loss / len(testloader)
 
+	def pretrain_generator(self, trainloader) -> None:
+		self.generator.train()
+
+		for l_batch, ab_batch in tqdm(trainloader):
+
+			# get real and fake images
+			real_images = torch.cat(l_batch, ab_batch, dim=1)
+			fake_ab_batch = self.generator(l_batch)
+			fake_images = torch.cat(l_batch, fake_ab_batch, dim=1)
+			
+			loss = self.l1_criterion(fake_images, real_images)
+			self.pre_optimizer.zero_grad()
+			loss.backward()
+			self.pre_optimizer.step()
+
 	def save(self):
 		model_path = os.path.join(SAVE_PATH, self.name)
 		if not os.path.isdir(model_path): os.mkdir(model_path)
@@ -138,11 +154,12 @@ class Painter(nn.Module):
 		logger, g_weights, d_weights = torch.load(os.path.join(model_path, 'save_data.pt'))
 		self.logger = logger
 
-		self.generator = Unet(logger.g_params)
+		self.generator = Unet(logger.g_params).to(self.device)
 		self.generator.load_state_dict(g_weights)
-		self.discriminator = Discriminator(logger.d_params)
+		self.discriminator = Discriminator(logger.d_params).to(self.device)
 		self.discriminator.load_state_dict(d_weights)
 
+		self.pre_optimizer = torch.optim.Adam(self.generator.parameters(), lr=logger.hyparams.lr_pre)
 		self.optimizer_g = torch.optim.Adam(self.generator.parameters(), lr=logger.hyparams.lr_g)
 		self.optimizer_d = torch.optim.Adam(self.discriminator.parameters(), lr=logger.hyparams.lr_d)
 
