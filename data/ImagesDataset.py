@@ -16,6 +16,7 @@ class ImagesDataset(Dataset):
 	def __init__(self, data_paths: list[str], device):
 		self.paths = data_paths
 		self.device = device
+		self.toTensor = transforms.ToTensor()
 
 	def __len__(self) -> int:
 		return len(self.paths)
@@ -27,8 +28,8 @@ class ImagesDataset(Dataset):
 		image = np.array(Image.open(self.paths[idx]).convert("RGB"))
 		# TODO: maybe add noise if train dataset
 		# TODO: resize image to be uniform shape
-		image_lab = rgb2lab(image).astype(np.float32)					# convert to lab (and lower from float64 to float32)
-		tensor_image = transforms.ToTensor(image_lab).to(self.device)	# transform to tensor (also changes shape to C*H*W)
+		image_lab = rgb2lab(image).astype(np.float32)			# convert to lab (and lower from float64 to float32)
+		tensor_image = self.toTensor(image_lab).to(self.device)	# transform to tensor (also changes shape to C*H*W)
 		
 		l = tensor_image[[0],...] / 50. -1.	# Get normalized L channel (value range is (0, 100))
 		ab = tensor_image[[1,2],...] / 110.	# Get normalized ab channels (value range is (-107.8573, 100))

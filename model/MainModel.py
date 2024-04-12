@@ -8,10 +8,10 @@ from tqdm.notebook import tqdm
 import os
 from shutil import copyfile
 
-from Discriminator import Discriminator
-from GANLoss import GANLoss
-from Unet import Unet
-from logger import Logger
+from model.Discriminator import Discriminator
+from model.GANLoss import GANLoss
+from model.Unet import Unet
+from model.logger import Logger
 
 from data.ImagesDataset import tensor_to_image
 
@@ -22,10 +22,12 @@ class Painter(nn.Module):
 	""" GAN architecture with Unet generator """
 
 	def __init__(self, name:str, hyparams=None, load=False, device=None):
+		super(Painter, self).__init__()
+
 		self.name = name
 		self.device = device
 
-		self.gan_criterion = GANLoss()
+		self.gan_criterion = GANLoss(device)
 		self.l1_criterion = nn.L1Loss()
 
 		if load: self.load()
