@@ -1,0 +1,2 @@
+# ignore pytorch cache
+**/__pycache__
