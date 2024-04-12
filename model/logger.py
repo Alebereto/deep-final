@@ -14,11 +14,14 @@ class Logger():
 		self.name = name
 		self.hyparams = hyparams
 
-		self.g_test_loss, self.g_train_loss = list(), list()
-		self.d_test_loss, self.d_train_loss = list(), list()
+		self.pretrain_loss = list()	# (train, test) tuples
+
+		self.train_loss = list()	# (generator, discriminator) tuples
+		self.test_loss = list()		# (generator, discriminator) tuples
 
 		self.recent_images = deque(maxlen=5) # tuples of (gray, colored, fake) as tensors
 		
+		self.epochs_pretrained = 0
 		self.epochs_trained = 0
 
 	def after_epoch(self, train_loss, test_loss) -> None:
@@ -26,10 +29,15 @@ class Logger():
 
 		self.epochs_trained += 1
 
-		self.g_train_loss.append(train_loss[0])
-		self.d_train_loss.append(train_loss[1])
-		self.g_test_loss.append(test_loss[0])
-		self.d_test_loss.append(test_loss[1])
+		self.train_loss.append(train_loss)
+		self.test_loss.append(test_loss)
+
+	def after_pretrain(self, train_loss, test_loss) -> None:
+		""" Update values after pretrain epoch """
+
+		self.epochs_pretrained += 1
+
+		self.pretrain_loss.append((train_loss, test_loss))
 
 	def add_images(self, real_images, fake_images) -> None:
 		""" gets batch of real images and fake images from test, saves some of them """
@@ -42,29 +50,40 @@ class Logger():
 			gray = real_images[i][0]
 			self.recent_images.append((gray, real_images[i], fake_images[i]))
 
-	def plot_performence(self, show=True) -> None:
-		x = np.arange(1, len(self.g_train_loss) + 1)
+	def plot_performence(self, pretrain=False, show=True) -> None:
 
-		plt.subplot(121)
-		plt.plot(x, self.g_train_loss, color='c', label='Train loss')
-		plt.plot(x, self.g_test_loss, color='g', label='Test loss')
+		if pretrain: x = np.arange(1, len(self.pretrain_loss) + 1)
+		else: x = np.arange(1, len(self.train_loss) + 1)
+
+		if pretrain:
+			g_train_loss, g_test_loss = zip(*self.pretrain_loss)
+		else:
+			g_train_loss, d_train_loss = zip(*self.train_loss)
+			g_test_loss, d_test_loss = zip(*self.test_loss)
+
+			plt.subplot(121)
+
+		plt.plot(x, g_train_loss, color='c', label='Train loss')
+		plt.plot(x, g_test_loss, color='g', label='Test loss')
 		plt.xlabel('Epoch')
 		plt.ylabel('Average Loss')
 		plt.title('Generator Loss')
 		plt.legend()
 
-		plt.subplot(122)
-		plt.plot(x, self.d_train_loss, color='c', label='Train loss')
-		plt.plot(x, self.d_test_loss, color='g', label='Test loss')
-		plt.xlabel('Epoch')
-		plt.ylabel('Average Loss')
-		plt.title('Discriminator Loss')
-		plt.legend()
+		if not pretrain:
+			plt.subplot(122)
+			plt.plot(x, d_train_loss, color='c', label='Train loss')
+			plt.plot(x, d_test_loss, color='g', label='Test loss')
+			plt.xlabel('Epoch')
+			plt.ylabel('Average Loss')
+			plt.title('Discriminator Loss')
+			plt.legend()
 
 		if show: plt.show()
 		else:
+			im_name = 'pretrain_preformence.png' if pretrain else 'model_preformence.png'
 			model_path = os.path.join(SAVE_PATH, self.name)
-			plt.savefig(os.path.join(model_path, 'performence.png'))
+			plt.savefig(os.path.join(model_path, im_name))
 			plt.clf()
 
 	def plot_coloring(self, show=True) -> None:

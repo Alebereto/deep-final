@@ -75,7 +75,7 @@ class Painter(nn.Module):
 		self.optimizer_g.zero_grad()
 
 		fake_preds = self.discriminator(fake_images)
-		loss = self.gan_criterion(fake_preds, True)
+		loss = self.gan_criterion(fake_preds, real_data=True)
 		loss.backward()
 
 		self.optimizer_g.step()
@@ -86,8 +86,8 @@ class Painter(nn.Module):
 		""" Trains model for 1 epoch, returns average loss for generator and discriminator """
 
 		self.generator.train()	# maybe needs to be eval when generating fake images for discriminator
-		sum_g_loss = 0
-		sum_d_loss = 0
+		sum_g_loss = 0.
+		sum_d_loss = 0.
 
 		for l_batch, ab_batch in tqdm(trainloader):	# Note: tdqm is a wrapper that shows progress (didnt try it yet)
 
@@ -101,13 +101,13 @@ class Painter(nn.Module):
 
 		return sum_g_loss / len(trainloader), sum_d_loss / len(trainloader)
 
-	def test_model(self, testloader) -> tuple[float,float]:
+	def test_model(self, testloader, pretrain=False):
 		""" Tests model on testset, returns average loss for generator and discriminator """
 
 		self.generator.eval()
 		self.discriminator.eval()
-		sum_g_loss = 0
-		sum_d_loss = 0
+		sum_g_loss = 0.
+		sum_d_loss = 0.
 
 		with torch.no_grad():
 			for l_batch, ab_batch in testloader:
@@ -119,13 +119,29 @@ class Painter(nn.Module):
 				self.logger.add_images(real_images, fake_images)
 
 				# TODO: get losses and add to sum
-				sum_g_loss += 0
-				sum_d_loss += 0
+				if pretrain:
+					sum_g_loss += self.l1_criterion(fake_images, real_images).item()
+				else:
+					fake_preds = self.discriminator(fake_images)
+					real_preds = self.discriminator(real_images)
 
-		return sum_g_loss / len(testloader), sum_d_loss / len(testloader)
+					g_loss = self.gan_criterion(fake_preds, real_data=True)
+					sum_g_loss += g_loss.item()
+
+					loss_fake = self.gan_criterion(fake_preds, real_data=False)
+					loss_real = self.gan_criterion(real_preds, real_data=True)
+
+					loss = (loss_fake + loss_real) * 0.5
+					sum_d_loss += loss.item()
+
+		if pretrain: losses = sum_g_loss / len(testloader)
+		else: losses = (sum_g_loss / len(testloader), sum_d_loss / len(testloader))
+
+		return losses
 
 	def pretrain_generator(self, trainloader) -> None:
 		self.generator.train()
+		sum_loss = 0
 
 		for l_batch, ab_batch in tqdm(trainloader):
 
@@ -138,6 +154,10 @@ class Painter(nn.Module):
 			self.pre_optimizer.zero_grad()
 			loss.backward()
 			self.pre_optimizer.step()
+
+			sum_loss += loss.item()
+
+		return sum_loss / len(trainloader)
 
 	def save(self):
 		model_path = os.path.join(SAVE_PATH, self.name)
