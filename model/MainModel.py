@@ -89,7 +89,7 @@ class Painter(nn.Module):
 		sum_g_loss = 0.
 		sum_d_loss = 0.
 
-		for l_batch, ab_batch in tqdm(trainloader):	# Note: tdqm is a wrapper that shows progress (didnt try it yet)
+		for l_batch, ab_batch in tqdm(trainloader, desc='Train'):
 
 			# get real and fake images
 			real_images = torch.cat(l_batch, ab_batch, dim=1)
@@ -110,7 +110,7 @@ class Painter(nn.Module):
 		sum_d_loss = 0.
 
 		with torch.no_grad():
-			for l_batch, ab_batch in testloader:
+			for l_batch, ab_batch in tqdm(testloader, desc='Test'):
 				real_images = torch.cat(l_batch, ab_batch, dim=1)
 				fake_ab_batch = self.generator(l_batch)
 				fake_images = torch.cat(l_batch, fake_ab_batch, dim=1)
@@ -118,7 +118,7 @@ class Painter(nn.Module):
 				# save some images from batch to logger
 				self.logger.add_images(real_images, fake_images)
 
-				# TODO: get losses and add to sum
+				# get losses
 				if pretrain:
 					sum_g_loss += self.l1_criterion(fake_images, real_images).item()
 				else:
@@ -164,6 +164,7 @@ class Painter(nn.Module):
 		if not os.path.isdir(model_path): os.mkdir(model_path)
 		save_data = (self.logger, self.generator.state_dict(), self.discriminator.state_dict())
 
+		if self.logger.epochs_pretrained > 0: self.logger.plot_performence(show=False, pretrain=True)
 		self.logger.plot_performence(show=False)
 		self.logger.plot_coloring(show=False)
 		torch.save(save_data, os.path.join(model_path, 'save_data.pt'))
