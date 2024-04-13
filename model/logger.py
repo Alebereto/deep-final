@@ -2,7 +2,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 from collections import deque
 import os
-from data.ImagesDataset import tensor_to_image, gray_tensor_to_image
+from data.ImagesDataset import tensor_to_image
+import cv2
 
 SAVE_PATH = "results"
 
@@ -10,16 +11,15 @@ class Logger():
 	""" Class containing information of model, such as layer dimensions
 	 	or training stats. Also has functions for plots and debugging. """
 
-	def __init__(self, name, hyparams) -> None:
+	def __init__(self, name) -> None:
 		self.name = name
-		self.hyparams = hyparams
 
 		self.pretrain_loss = list()	# (train, test) tuples
 
 		self.train_loss = list()	# (generator, discriminator) tuples
 		self.test_loss = list()		# (generator, discriminator) tuples
 
-		self.recent_images = deque(maxlen=5) # tuples of (gray, colored, fake) as tensors
+		self.recent_images = deque(maxlen=5) # tuples of (colored, fake) as tensors
 		
 		self.epochs_pretrained = 0
 		self.epochs_trained = 0
@@ -47,8 +47,7 @@ class Logger():
 		real_images, fake_images = real_images[indeces], fake_images[indeces]
 
 		for i in range(len(real_images)):
-			gray = real_images[i][0]
-			self.recent_images.append((gray, real_images[i], fake_images[i]))
+			self.recent_images.append((real_images[i], fake_images[i]))
 
 	def plot_performence(self, pretrain=False, show=True) -> None:
 
@@ -84,7 +83,7 @@ class Logger():
 			im_name = 'pretrain_preformence.png' if pretrain else 'model_preformence.png'
 			model_path = os.path.join(SAVE_PATH, self.name)
 			plt.savefig(os.path.join(model_path, im_name))
-			plt.clf()
+		plt.close()
 
 	def plot_coloring(self, show=True) -> None:
 
@@ -92,26 +91,34 @@ class Logger():
 		if img_count == 0: return
 
 		for i in range(img_count):
-			gray, real, fake = self.recent_images[i]
+			real, fake = self.recent_images[i]
+			real_img = tensor_to_image(real)
+			fake_img = tensor_to_image(fake)
+			gray_img = cv2.cvtColor(real_img, cv2.COLOR_RGB2GRAY)
 
-			plt.subplot(img_count,3,(i*3)+1)
-			if i == 0: plt.title("Grayscale")
-			plt.axis('off')
-			plt.imshow(gray_tensor_to_image(gray), cmap='gray')
+			plt.subplot(3,img_count,(i+1))
+			if i == 0: plt.ylabel("Gray")
+			plt.xticks([])
+			plt.yticks([])
+			plt.imshow(gray_img, vmin=0, vmax=255, cmap='gray')
 
-			plt.subplot(img_count,3,(i*3)+2)
-			if i == 0: plt.title("Real Color")
-			plt.axis('off')
-			plt.imshow(tensor_to_image(real))
+			plt.subplot(3,img_count,(img_count)+(i+1))
+			if i == 0: plt.ylabel("Real")
+			plt.xticks([])
+			plt.yticks([])
+			plt.imshow(real_img, vmin=0, vmax=255)
 
-			plt.subplot(img_count,3,(i*3)+3)
-			if i == 0: plt.title("Fake Color")
-			plt.axis('off')
-			plt.imshow(tensor_to_image(fake))
+			plt.subplot(3,img_count,(2*img_count)+(i+1))
+			if i == 0: plt.ylabel("Fake")
+			plt.xticks([])
+			plt.yticks([])
+			plt.imshow(fake_img, vmin=0, vmax=255)
 
-		if show: plt.show()
+		plt.subplots_adjust(hspace=-0.567)
+		if show:
+			plt.show()
 		else:
 			model_path = os.path.join(SAVE_PATH, self.name)
 			plt.savefig(os.path.join(model_path, 'coloring.png'))
-			plt.clf()
+		plt.close()
 

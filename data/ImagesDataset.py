@@ -16,6 +16,7 @@ class ImagesDataset(Dataset):
 	def __init__(self, data_paths: list[str], device):
 		self.paths = data_paths
 		self.device = device
+		self.transform = transforms.Resize((256, 256),  Image.BICUBIC)
 		self.toTensor = transforms.ToTensor()
 
 	def __len__(self) -> int:
@@ -25,14 +26,13 @@ class ImagesDataset(Dataset):
 		""" Returns normalized (-1 to 1) L channel with shape [1,H,W],
 			and normalized (-1 to 1) ab channels with shape [2,H,W] """
 
-		image = np.array(Image.open(self.paths[idx]).convert("RGB"))
-		# TODO: maybe add noise if train dataset
-		# TODO: resize image to be uniform shape
-		image_lab = rgb2lab(image).astype(np.float32)			# convert to lab (and lower from float64 to float32)
-		tensor_image = self.toTensor(image_lab).to(self.device)	# transform to tensor (also changes shape to C*H*W)
+		img = Image.open(self.paths[idx]).convert("RGB")
+		img = np.array(self.transform(img))
+		img = rgb2lab(img).astype(np.float32)		# convert to lab (and lower from float64 to float32)
+		img = self.toTensor(img).to(self.device)	# transform to tensor (also changes shape to C*H*W)
 		
-		l = tensor_image[[0],...] / 50. -1.	# Get normalized L channel (value range is (0, 100))
-		ab = tensor_image[[1,2],...] / 110.	# Get normalized ab channels (value range is (-107.8573, 100))
+		l = (img[[0],...] / 50.) -1.	# Get normalized L channel (value range is (0, 100))
+		ab = img[[1,2],...] / 110.	# Get normalized ab channels (value range is (-107.8573, 100))
 
 		return l, ab
 
@@ -50,13 +50,14 @@ def create_datasets(data_path: str, train_size: int, test_size: int, seed=None, 
 	return ImagesDataset(train_paths, device), ImagesDataset(test_paths, device)
 
 def tensor_to_image(tensor:torch.Tensor) -> np.ndarray:
-	""" gets lab image as tensor, returns rgb image as numpy array """
+	""" gets normalized lab image as tensor, returns rgb image as numpy array """
 
-	lab_image = tensor.permute(1,2,0).numpy()
-	return lab2rgb(lab_image)
+	l = (tensor[[0],...] + 1.) * 50.	# Un-normalize
+	ab = tensor[[1,2],...] * 110.	    	# Un-normalize
+	tensor = torch.cat([l,ab], dim=0)
 
-def gray_tensor_to_image(tensor:torch.Tensor) -> np.ndarray:
-	""" gets grayscale image as tensor, returns grayscale image as numpy array """
+	img = tensor.permute(1,2,0).cpu().numpy()	# reshape to (H,W,C)
 
-	return tensor.numpy()[0]
+	img = lab2rgb(img) * 255	# (result is values from 0 to 1)
+	return np.clip(img, a_min=0, a_max=255).astype(np.uint8)
 

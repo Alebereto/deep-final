@@ -21,7 +21,7 @@ SAVE_PATH = "results"
 class Painter(nn.Module):
 	""" GAN architecture with Unet generator """
 
-	def __init__(self, name:str, hyparams=None, load=False, device=None):
+	def __init__(self, name:str, hyparams, load=False, load_pretrain = False, device=None):
 		super(Painter, self).__init__()
 
 		self.name = name
@@ -32,21 +32,22 @@ class Painter(nn.Module):
 
 		if load: self.load()
 		else:
-			self.logger = Logger(name, hyparams)
+			self.logger = Logger(name)
 
 			self.generator = Unet().to(self.device)
 			self.discriminator = Discriminator().to(self.device)
 
-			self.pre_optimizer = torch.optim.Adam(self.generator.parameters(), lr=hyparams.lr_pre)
-			self.optimizer_g = torch.optim.Adam(self.generator.parameters(), lr=hyparams.lr_g)
-			self.optimizer_d = torch.optim.Adam(self.discriminator.parameters(), lr=hyparams.lr_d)
+		self.pre_optimizer = torch.optim.Adam(self.generator.parameters(), lr=hyparams.lr_pre)
+		self.optimizer_g = torch.optim.Adam(self.generator.parameters(), lr=hyparams.lr_g)
+		self.optimizer_d = torch.optim.Adam(self.discriminator.parameters(), lr=hyparams.lr_d)
+
 
 	def paint(self, gray_image):
 		""" Gets grayscale image, returns painted image """
 		
 		self.generator.eval()
 		gray_tensor = torch.tensor([gray_image], dtype=torch.float32, device=self.device)
-		lab_image = torch.cat(gray_tensor, self.generator(gray_tensor), dim=0)
+		lab_image = torch.cat((gray_tensor, self.generator(gray_tensor)), dim=0)
 		return tensor_to_image(lab_image)
 
 
@@ -94,9 +95,9 @@ class Painter(nn.Module):
 		for l_batch, ab_batch in tqdm(trainloader, desc='Train'):
 
 			# get real and fake images
-			real_images = torch.cat(l_batch, ab_batch, dim=1)
+			real_images = torch.cat((l_batch, ab_batch), dim=1)
 			fake_ab_batch = self.generator(l_batch)
-			fake_images = torch.cat(l_batch, fake_ab_batch, dim=1)
+			fake_images = torch.cat((l_batch, fake_ab_batch), dim=1)
 			
 			sum_d_loss += self.optimize_discriminator(real_images, fake_images.detach())
 			sum_g_loss += self.optimize_generator(fake_images)
@@ -113,9 +114,9 @@ class Painter(nn.Module):
 
 		with torch.no_grad():
 			for l_batch, ab_batch in tqdm(testloader, desc='Test'):
-				real_images = torch.cat(l_batch, ab_batch, dim=1)
+				real_images = torch.cat((l_batch, ab_batch), dim=1)
 				fake_ab_batch = self.generator(l_batch)
-				fake_images = torch.cat(l_batch, fake_ab_batch, dim=1)
+				fake_images = torch.cat((l_batch, fake_ab_batch), dim=1)
 
 				# save some images from batch to logger
 				self.logger.add_images(real_images, fake_images)
@@ -145,12 +146,12 @@ class Painter(nn.Module):
 		self.generator.train()
 		sum_loss = 0
 
-		for l_batch, ab_batch in tqdm(trainloader):
+		for l_batch, ab_batch in tqdm(trainloader, desc='Train'):
 
 			# get real and fake images
-			real_images = torch.cat(l_batch, ab_batch, dim=1)
+			real_images = torch.cat((l_batch, ab_batch), dim=1)
 			fake_ab_batch = self.generator(l_batch)
-			fake_images = torch.cat(l_batch, fake_ab_batch, dim=1)
+			fake_images = torch.cat((l_batch, fake_ab_batch), dim=1)
 			
 			loss = self.l1_criterion(fake_images, real_images)
 			self.pre_optimizer.zero_grad()
@@ -161,31 +162,29 @@ class Painter(nn.Module):
 
 		return sum_loss / len(trainloader)
 
-	def save(self):
+	def save(self, pretrain=False):
+		data_name = 'save_data_pre.pt' if pretrain else 'save_data.pt'
 		model_path = os.path.join(SAVE_PATH, self.name)
 		if not os.path.isdir(model_path): os.mkdir(model_path)
 		save_data = (self.logger, self.generator.state_dict(), self.discriminator.state_dict())
 
 		if self.logger.epochs_pretrained > 0: self.logger.plot_performence(show=False, pretrain=True)
-		self.logger.plot_performence(show=False)
-		self.logger.plot_coloring(show=False)
-		torch.save(save_data, os.path.join(model_path, 'save_data.pt'))
+		if self.logger.epochs_trained > 0: self.logger.plot_performence(show=False)
+		if len(self.logger.recent_images) > 0: self.logger.plot_coloring(show=False)
+		torch.save(save_data, os.path.join(model_path, data_name))
 
-	def load(self):
+	def load(self, pretrain=False):
+		data_name = 'save_data_pre.pt' if pretrain else 'save_data.pt'
 		model_path = os.path.join(SAVE_PATH, self.name)
 		assert os.path.isdir(model_path), f'Model with name "{self.name}" does not exist in path'
 
-		logger, g_weights, d_weights = torch.load(os.path.join(model_path, 'save_data.pt'))
+		logger, g_weights, d_weights = torch.load(os.path.join(model_path, data_name))
 		self.logger = logger
 
 		self.generator = Unet().to(self.device)
 		self.generator.load_state_dict(g_weights)
 		self.discriminator = Discriminator().to(self.device)
 		self.discriminator.load_state_dict(d_weights)
-
-		self.pre_optimizer = torch.optim.Adam(self.generator.parameters(), lr=logger.hyparams.lr_pre)
-		self.optimizer_g = torch.optim.Adam(self.generator.parameters(), lr=logger.hyparams.lr_g)
-		self.optimizer_d = torch.optim.Adam(self.discriminator.parameters(), lr=logger.hyparams.lr_d)
 
 
 	def count_parameters(self):
