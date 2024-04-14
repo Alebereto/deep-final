@@ -3,27 +3,40 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 
+class DoubleConv(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super(DoubleConv, self).__init__()
+        self.conv = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),
+            nn.BatchNorm2d(out_channels),
+            nn.LeakyReLU(inplace=True),
+            nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1),
+            nn.BatchNorm2d(out_channels),
+            nn.LeakyReLU(inplace=True)
+        )
+        
+    def forward(self, x):
+        return self.conv(x)
+
+
 class UnetIn(nn.Module):
     def __init__(self, in_channels, out_channels):
         super(UnetIn, self).__init__()
-        self.conv = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),
-            nn.ReLU(),
-            nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1),
-            nn.ReLU()
-        )
+        self.conv = DoubleConv(in_channels, out_channels)
+        
+    def forward(self, x):
+        return self.conv(x)
+
 
 class UnetDown(nn.Module):
     def __init__(self, in_channels, out_channels):
         super(UnetDown, self).__init__()
         self.conv = nn.Sequential(
-            nn.MaxPool2d(2),
-            nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),
-            nn.ReLU(),
-            nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1),
-            nn.ReLU()
+            # nn.MaxPool2d(2),
+            nn.Conv2d(in_channels, in_channels, kernel_size=4, stride=2, padding=1),
+            DoubleConv(in_channels, out_channels)
         )
-
+        
     def forward(self, x):
         return self.conv(x)
 
@@ -31,16 +44,11 @@ class UnetUp(nn.Module):
     def __init__(self, in_channels, out_channels):
         super(UnetUp, self).__init__()
         self.upConv = nn.ConvTranspose2d(in_channels, in_channels // 2, kernel_size=2, stride=2)
-        self.conv = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),
-            nn.ReLU(),
-            nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1),
-            nn.ReLU()
-        )
+        self.conv = DoubleConv(in_channels, out_channels)
 
     def forward(self, x1, x2):
         x1 = self.upConv(x1)
-        x = torch.cat([x2, x1], dim=0)
+        x = torch.cat([x2, x1], dim=1)  # dim 1 is channels
         return self.conv(x)
 
 class UnetOut(nn.Module):
@@ -84,6 +92,7 @@ class Unet(nn.Module):
         
         x = self.convOut(x)
         return x
+
     
 
 class Discriminator(nn.Module):
