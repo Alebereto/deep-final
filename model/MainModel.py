@@ -21,7 +21,7 @@ SAVE_PATH = "results"
 class Painter(nn.Module):
 	""" GAN architecture with Unet generator """
 
-	def __init__(self, name:str, hyparams, load=False, load_pretrain = False, device=None):
+	def __init__(self, name:str, hyparams, load=False, load_pretrain=False, device=None):
 		super(Painter, self).__init__()
 
 		self.name = name
@@ -30,7 +30,7 @@ class Painter(nn.Module):
 		self.gan_criterion = GANLoss(device)
 		self.l1_criterion = nn.L1Loss()
 
-		if load: self.load()
+		if load: self.load(load_pretrain)
 		else:
 			self.logger = Logger(name)
 
@@ -180,6 +180,7 @@ class Painter(nn.Module):
 
 		logger, g_weights, d_weights = torch.load(os.path.join(model_path, data_name))
 		self.logger = logger
+		logger.name = self.name
 
 		self.generator = Unet().to(self.device)
 		self.generator.load_state_dict(g_weights)

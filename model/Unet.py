@@ -55,19 +55,19 @@ class UnetOut(nn.Module):
 class Unet(nn.Module):
     def __init__(self, networkIn=1, output=2) -> None:
         super(Unet, self).__init__()
-        self.convIn = UnetIn(networkIn, 16)
+        self.convIn = UnetIn(networkIn, 32)
         
-        self.convDown1 = UnetDown(16, 32)
-        self.convDown2 = UnetDown(32, 64)
-        self.convDown3 = UnetDown(64, 128)
-        # self.convDown4 = UnetDown(256, 512)
+        self.convDown1 = UnetDown(32, 64)
+        self.convDown2 = UnetDown(64, 128)
+        self.convDown3 = UnetDown(128, 256)
+        self.convDown4 = UnetDown(256, 512)
         
-        # self.convUp4 = UnetUp(512, 256)
-        self.convUp3 = UnetUp(128, 64)
-        self.convUp2 = UnetUp(64, 32)
-        self.convUp1 = UnetUp(32, 16)
+        self.convUp4 = UnetUp(512, 256)
+        self.convUp3 = UnetUp(256, 128)
+        self.convUp2 = UnetUp(128, 64)
+        self.convUp1 = UnetUp(64, 32)
         
-        self.convOut = UnetOut(16, output)
+        self.convOut = UnetOut(32, output)
         
     def forward(self, x):
         x1 = self.convIn(x)
@@ -75,11 +75,10 @@ class Unet(nn.Module):
         x2 = self.convDown1(x1)
         x3 = self.convDown2(x2)
         x4 = self.convDown3(x3)
-        # x5 = self.convDown4(x4)
+        x5 = self.convDown4(x4)
         
-        # x = self.convUp4(x5, x4)
-        # x = self.convUp3(x, x3)
-        x = self.convUp3(x4, x3)
+        x = self.convUp4(x5, x4)
+        x = self.convUp3(x, x3)
         x = self.convUp2(x, x2)
         x = self.convUp1(x, x1)
         
