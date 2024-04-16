@@ -10,6 +10,7 @@ import random
 
 from PIL import Image
 from skimage.color import rgb2lab, lab2rgb
+import warnings
 
 
 class ImagesDataset(Dataset):
@@ -58,6 +59,8 @@ def tensor_to_image(tensor:torch.Tensor) -> np.ndarray:
 
 	img = tensor.permute(1,2,0).cpu().numpy()	# reshape to (H,W,C)
 
-	img = lab2rgb(img) * 255	# (result is values from 0 to 1)
+	with warnings.catch_warnings():
+		warnings.simplefilter("ignore")
+		img = lab2rgb(img) * 255	# (result is values from 0 to 1)
 	return np.clip(img, a_min=0, a_max=255).astype(np.uint8)
 
