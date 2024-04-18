@@ -1,14 +1,15 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 class DoubleConv(nn.Module):
     def __init__(self, in_channels, out_channels):
         super(DoubleConv, self).__init__()
         self.conv = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),
+            nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, bias=False),
             nn.BatchNorm2d(out_channels),
             nn.LeakyReLU(inplace=True),
-            nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1),
+            nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1, bias=False),
             nn.BatchNorm2d(out_channels),
             nn.LeakyReLU(inplace=True)
         )
@@ -30,7 +31,6 @@ class UnetDown(nn.Module):
     def __init__(self, in_channels, out_channels):
         super(UnetDown, self).__init__()
         self.conv = nn.Sequential(
-            # nn.MaxPool2d(2),
             nn.Conv2d(in_channels, in_channels, kernel_size=4, stride=2, padding=1),
             DoubleConv(in_channels, out_channels)
         )
@@ -55,25 +55,26 @@ class UnetOut(nn.Module):
         self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=1)
 
     def forward(self, x):
-        return self.conv(x)
+        return F.tanh(self.conv(x))
         
 
 class Unet(nn.Module):
     def __init__(self, networkIn=1, output=2) -> None:
         super(Unet, self).__init__()
-        self.convIn = UnetIn(networkIn, 32)
+        filters = 32
+        self.convIn = UnetIn(networkIn, filters)
         
-        self.convDown1 = UnetDown(32, 64)
-        self.convDown2 = UnetDown(64, 128)
-        self.convDown3 = UnetDown(128, 256)
-        self.convDown4 = UnetDown(256, 512)
+        self.convDown1 = UnetDown(filters, filters*2)
+        self.convDown2 = UnetDown(filters*2, filters*4)
+        self.convDown3 = UnetDown(filters*4, filters*8)
+        self.convDown4 = UnetDown(filters*8, filters*16)
         
-        self.convUp4 = UnetUp(512, 256)
-        self.convUp3 = UnetUp(256, 128)
-        self.convUp2 = UnetUp(128, 64)
-        self.convUp1 = UnetUp(64, 32)
+        self.convUp4 = UnetUp(filters*16, filters*8)
+        self.convUp3 = UnetUp(filters*8, filters*4)
+        self.convUp2 = UnetUp(filters*4, filters*2)
+        self.convUp1 = UnetUp(filters*2, filters)
         
-        self.convOut = UnetOut(32, output)
+        self.convOut = UnetOut(filters, output)
         
     def forward(self, x):
         x1 = self.convIn(x)

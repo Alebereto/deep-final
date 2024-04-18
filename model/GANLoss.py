@@ -7,8 +7,9 @@ class GANLoss():
 		self.dev = device
 	
 	def __call__(self, pred, real_data: bool) -> torch.Tensor:
-		if real_data: label = torch.ones(pred.size()[0], device=self.dev)
-		else: label = torch.zeros(pred.size()[0], device=self.dev)
+		batch_size = pred.size()[0]
+		if real_data: label = torch.ones((batch_size, ), device=self.dev)
+		else: label = torch.zeros((batch_size, ), device=self.dev)
 		loss = self.loss_func(pred, label)
 		return loss
 

@@ -1,2 +1,4 @@
 # ignore pytorch cache
 **/__pycache__
+
+*.pt

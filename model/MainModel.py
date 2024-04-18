@@ -37,9 +37,12 @@ class Painter(nn.Module):
 			self.generator = Unet().to(self.device)
 			self.discriminator = Discriminator().to(self.device)
 
+			self.generator.apply(weights_init)
+			self.discriminator.apply(weights_init)
+
 		self.pre_optimizer = torch.optim.Adam(self.generator.parameters(), lr=hyparams.lr_pre)
-		self.optimizer_g = torch.optim.Adam(self.generator.parameters(), lr=hyparams.lr_g)
-		self.optimizer_d = torch.optim.Adam(self.discriminator.parameters(), lr=hyparams.lr_d)
+		self.optimizer_g = torch.optim.Adam(self.generator.parameters(), lr=hyparams.lr_g, betas=(0.5,0.999))
+		self.optimizer_d = torch.optim.Adam(self.discriminator.parameters(), lr=hyparams.lr_d, betas=(0.5,0.999))
 
 
 	def paint(self, gray_image):
@@ -185,7 +188,7 @@ class Painter(nn.Module):
 		self.generator = Unet().to(self.device)
 		self.generator.load_state_dict(g_weights)
 		self.discriminator = Discriminator().to(self.device)
-		self.discriminator.load_state_dict(d_weights)
+		if not pretrain: self.discriminator.load_state_dict(d_weights)
 
 
 	def count_parameters(self):
@@ -194,4 +197,12 @@ class Painter(nn.Module):
 		d_pcount = sum(p.numel() for p in self.discriminator.parameters() if p.requires_grad)
 
 		return g_pcount + d_pcount
+
+def weights_init(m):
+		classname = m.__class__.__name__
+		if hasattr(m, 'weight') and 'Conv' in classname:
+			nn.init.normal_(m.weight.data, mean=0.0, std=0.02)
+		elif 'BatchNorm2d' in classname:
+			nn.init.normal_(m.weight.data, mean=1.0, std=0.02)
+			nn.init.constant_(m.bias.data, 0.)
 

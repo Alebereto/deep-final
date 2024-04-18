@@ -5,6 +5,10 @@ import os
 from tqdm import tqdm
 import numpy as np
 
+# Download images from:
+# https://data.vision.ee.ethz.ch/cvl/datasets_extra/food-101/
+# extract food-101 to 'data/' directory and run script
+
 
 SEED = 123
 ORIG_DIR = 'data\\food-101\\images'

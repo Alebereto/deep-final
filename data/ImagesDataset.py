@@ -45,8 +45,8 @@ def create_datasets(data_path: str, train_size: int, test_size: int, seed=None, 
 	assert train_size + test_size < len(paths), "Not enough data for specified sizes"
 
 	if seed is not None: random.seed(seed)
-	sub_paths = random.choices(paths, k=(train_size + test_size))
-	train_paths, test_paths = sub_paths[:train_size], sub_paths[train_size:]
+	random.shuffle(paths)
+	train_paths, test_paths = paths[:train_size], paths[(len(paths)-test_size):]
 
 	return ImagesDataset(train_paths, device), ImagesDataset(test_paths, device)
 

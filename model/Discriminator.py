@@ -4,26 +4,38 @@ import torch.nn.functional as F
 
 
 class Discriminator(nn.Module):
-	def __init__(self) -> None:
+	def __init__(self):
 		super(Discriminator, self).__init__()
-		self.conv = nn.Sequential(
-            nn.Conv2d(3, 64, kernel_size=5, stride=2, padding=1),
-            nn.LeakyReLU(0.2),
-            nn.Conv2d(64, 64, kernel_size=5, stride=2, padding=1, bias=False),
-            nn.LeakyReLU(0.2),
-			# nn.BatchNorm2d(),
-			nn.Conv2d(64, 64, kernel_size=5, stride=2, padding=1, bias=False),
-            nn.LeakyReLU(0.2),
-        )
-		self.linear = nn.Linear(11111, 1)	# need flattened dimension
+		input = 3
+		filters = 64
+		self.main = nn.Sequential(
+			nn.Conv2d(input, filters, 6, 2, 1, bias=False),
+			nn.LeakyReLU(0.2, inplace=True),
 
-	def forward(self, x):
-		x = self.conv(x)
-		print(x.size())
-		x = x.view(-1, 23123123) # need flattened dimension
-		x = self.linear(x)
-		return F.sigmoid(x)
+			nn.Conv2d(filters, (filters * 2), 6, 2, 1, bias=False),
+			nn.BatchNorm2d(filters * 2),
+			nn.LeakyReLU(0.2, inplace=True),
 
+			nn.Conv2d(filters * 2, (filters * 4), 6, 2, 1, bias=False),
+			nn.BatchNorm2d(filters * 4),
+			nn.LeakyReLU(0.2, inplace=True),
+
+			nn.Conv2d(filters * 4, (filters * 8), 6, 2, 1, bias=False),
+			nn.BatchNorm2d(filters * 8),
+			nn.LeakyReLU(0.2, inplace=True),
+
+			nn.Conv2d(filters * 8, (filters * 8), 6, 2, 1, bias=False),
+			nn.BatchNorm2d(filters * 8),
+			nn.LeakyReLU(0.2, inplace=True),
+
+			nn.Conv2d((filters * 8), 1, 6, 1, 0, bias=False),
+			nn.Sigmoid()
+		)
+
+	def forward(self, input):
+		output = self.main(input).view(-1)
+		return output
+	
 	def set_gradients(self, grad: bool):
 		for p in self.parameters():
 			p.requires_grad = grad
