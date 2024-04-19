@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from data.ImagesDataset import add_noise
+
 class DoubleConv(nn.Module):
     def __init__(self, in_channels, out_channels):
         super(DoubleConv, self).__init__()
@@ -77,6 +79,8 @@ class Unet(nn.Module):
         self.convOut = UnetOut(filters, output)
         
     def forward(self, x):
+        x = add_noise(x)
+
         x1 = self.convIn(x)
         
         x2 = self.convDown1(x1)
