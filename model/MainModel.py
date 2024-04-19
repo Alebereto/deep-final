@@ -73,7 +73,7 @@ class Painter(nn.Module):
 		loss.backward()
 		self.optimizer_d.step()
 
-		return (loss_fake, loss_real)
+		return (loss_fake.item(), loss_real.item())
 	
 	def optimize_generator(self, fake_images, fake_ab_batch, ab_batch) -> float:
 		""" Do a gradient step for generator, return loss """
@@ -91,7 +91,7 @@ class Painter(nn.Module):
 		loss.backward()
 		self.optimizer_g.step()
 
-		return (loss_gan, loss_l1)
+		return (loss_gan.item(), loss_l1.item())
 	
 
 	def train_model(self, trainloader) -> tuple[float,float]:
@@ -112,7 +112,7 @@ class Painter(nn.Module):
 
 			loss_gatherer(loss_fake, loss_real, loss_gan, loss_l1)
 
-		self.logger.after_epoch(loss_gatherer)
+		self.logger.after_epoch(loss_gatherer, train=True)
 
 	def test_model(self, testloader, pretrain=False, log=False):
 		""" Tests model on testset, returns losses """
@@ -139,9 +139,9 @@ class Painter(nn.Module):
 					fake_preds = self.discriminator(fake_images)
 					real_preds = self.discriminator(real_images)
 
-					loss_fake = self.gan_criterion(fake_preds, real_data=False)
-					loss_real = self.gan_criterion(real_preds, real_data=True)
-					loss_gan = self.gan_criterion(fake_preds, real_data=True)
+					loss_fake = self.gan_criterion(fake_preds, real_data=False).item()
+					loss_real = self.gan_criterion(real_preds, real_data=True).item()
+					loss_gan = self.gan_criterion(fake_preds, real_data=True).item()
 
 					loss_gatherer(loss_fake, loss_real, loss_gan, (loss_l1 * self.lmbda))
 

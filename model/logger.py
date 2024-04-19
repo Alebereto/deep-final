@@ -40,10 +40,10 @@ class Logger():
 
 		self.pretrain_loss = list()	# (train, test) tuples
 
-		# self.train_loss = list()	# (generator, discriminator) tuples # ===============================================================
-		# self.test_loss = list()		# (generator, discriminator) tuples
+		self.train_losses = list()	# (loss_fake, loss_real, gan_loss, l1_loss) tuples
+		self.test_losses = list()	# (loss_fake, loss_real, gan_loss, l1_loss) tuples
 
-		self.recent_images = deque(maxlen=5) # tuples of (colored, fake) as tensors
+		self.recent_images = deque(maxlen=5) # tuples of (colored, fake) as lab tensors
 		
 		self.epochs_pretrained = 0
 		self.epochs_trained = 0
@@ -51,15 +51,12 @@ class Logger():
 	def after_epoch(self, loss_gatherer:LossGatherer, train:bool) -> None:
 		""" Update values after epoch """
 
-		self.epochs_trained += 1
+		if train: self.epochs_trained += 1
 
-		loss_fake, loss_real, gan_loss, l1_loss = loss_gatherer.get_losses()
-		if train:
-			# add to train losses # ===============================================================
-			pass
-		else:
-			# add to test losses
-			pass
+		losses = loss_gatherer.get_losses()
+
+		if train: self.train_losses.append(losses)
+		else: self.test_losses.append(losses)
 
 	def after_pretrain(self, train_loss, test_loss) -> None:
 		""" Update values after pretrain epoch """
@@ -78,41 +75,42 @@ class Logger():
 		for i in range(len(real_images)):
 			self.recent_images.append((real_images[i], fake_images[i]))
 
-	def plot_performence(self, pretrain=False, show=True) -> None:
+	def plot_loss(self, train, test=None, title='plot', ylabel='Average Loss', xlabel='Epoch'):
 
-		if pretrain: x = np.arange(1, len(self.pretrain_loss) + 1)
-		else: x = np.arange(1, len(self.train_loss) + 1)
+		x = np.arange(1, len(train)+1)
+
+		plt.plot(x, train, color='c', label='Train loss')
+		if test is not None: plt.plot(x, test, color='g', label='Test loss')
+		plt.xlabel(xlabel)
+		plt.ylabel(ylabel)
+		plt.title(title)
+		plt.legend()
+
+	def plot_performence(self, pretrain=False, show=True) -> None:
+		""" Plot losses """
+
+		plots = list()	# list of losses and titles to plot
 
 		if pretrain:
 			g_train_loss, g_test_loss = zip(*self.pretrain_loss)
+			plots.append((g_train_loss, g_test_loss, 'Pretrain Loss'))
 		else:
-			g_train_loss, d_train_loss = zip(*self.train_loss)
-			g_test_loss, d_test_loss = zip(*self.test_loss)
+			train_loss_fake, train_loss_real, train_gan_loss, train_l1_loss = zip(*self.train_losses)
+			test_loss_fake, test_loss_real, test_gan_loss, test_l1_loss = zip(*self.test_losses)
 
-			plt.subplot(211)
+			plots.append((train_loss_fake, test_loss_fake, 'Discriminator Fake Loss'))
+			plots.append((train_loss_real, test_loss_real, 'Discriminator Real Loss'))
+			plots.append((train_gan_loss, test_gan_loss, 'Generator GAN Loss'))
+			plots.append((train_l1_loss, test_l1_loss, 'Generator L1 Loss (times lambda)'))
 
-		plt.plot(x, g_train_loss, color='c', label='Train loss')
-		plt.plot(x, g_test_loss, color='g', label='Test loss')
-		plt.xlabel('Epoch')
-		plt.ylabel('Average Loss')
-		plt.title('Generator Loss')
-		plt.legend()
+		model_path = os.path.join(SAVE_PATH, self.name)
 
-		if not pretrain:
-			plt.subplot(212)
-			plt.plot(x, d_train_loss, color='c', label='Train loss')
-			plt.plot(x, d_test_loss, color='g', label='Test loss')
-			plt.xlabel('Epoch')
-			plt.ylabel('Average Loss')
-			plt.title('Discriminator Loss')
-			plt.legend()
+		for train, test, title in plots:
+			self.plot_loss(train, test, title)
 
-		if show: plt.show()
-		else:
-			im_name = 'pretrain_preformence.png' if pretrain else 'model_preformence.png'
-			model_path = os.path.join(SAVE_PATH, self.name)
-			plt.savefig(os.path.join(model_path, im_name))
-		plt.close()
+			if show: plt.show()
+			else: 	 plt.savefig(f'{model_path}\\{title}.png')
+			plt.close()
 
 	def plot_coloring(self, show=True) -> None:
 
@@ -152,5 +150,14 @@ class Logger():
 		plt.close()
 
 	def print_epoch(self, idx=-1) -> None:
-		print('A')	# ===============================================================
+		train_loss_fake, train_loss_real, train_gan_loss, train_l1_loss = self.train_losses[idx]
+		test_loss_fake, test_loss_real, test_gan_loss, test_l1_loss = self.test_losses[idx]
+
+		print('=====Train Losses=====')
+		print(f'Discriminator Loss: {(train_loss_fake + train_loss_real) * 0.5 :.6f}, (Fake={train_loss_fake:.6f}), (Real={train_loss_real:.6f})')
+		print(f'Generator Loss: {train_gan_loss + train_l1_loss :.6f}, (GAN={train_gan_loss:.6f}), (L1={train_l1_loss:.6f})')
+
+		print('=====Test Losses=====')
+		print(f'Discriminator Loss: {(test_loss_fake + test_loss_real) * 0.5 :.6f}, (Fake={test_loss_fake:.6f}), (Real={test_loss_real:.6f})')
+		print(f'Generator Loss: {test_gan_loss + test_l1_loss :.6f}, (GAN={test_gan_loss:.6f}), (L1={test_l1_loss:.6f})')
 

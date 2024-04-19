@@ -77,6 +77,6 @@ def gray_to_tensor(img) -> torch.Tensor:
 	return l
 
 def add_noise(tensor: torch.Tensor, std=0.04, mean=0.) -> torch.Tensor:
-	noised = tensor + torch.randn(tensor.size()) * std + mean
+	noised = tensor + torch.randn(tensor.size(), device=(tensor.get_device())) * std + mean
 	return torch.clamp(noised, min=-1, max=1)
 
