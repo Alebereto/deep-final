@@ -10,6 +10,7 @@ import random
 
 from PIL import Image
 from skimage.color import rgb2lab, lab2rgb
+import cv2
 import warnings
 
 
@@ -63,4 +64,19 @@ def tensor_to_image(tensor:torch.Tensor) -> np.ndarray:
 		warnings.simplefilter("ignore")
 		img = lab2rgb(img) * 255	# (result is values from 0 to 1)
 	return np.clip(img, a_min=0, a_max=255).astype(np.uint8)
+
+def gray_to_tensor(img) -> torch.Tensor:
+	""" gets grayscale image, returns notmalized lab tensor """
+
+	toTensor = transforms.ToTensor()
+
+	img = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
+	img = rgb2lab(np.array(img)).astype(np.float32)
+	img = toTensor(img)
+	l = (img[[0],...] / 50.) -1.	# shape (1,H,W)
+	return l
+
+def add_noise(tensor: torch.Tensor, std=0.04, mean=0.) -> torch.Tensor:
+	noised = tensor + torch.randn(tensor.size()) * std + mean
+	return torch.clamp(noised, min=-1, max=1)
 

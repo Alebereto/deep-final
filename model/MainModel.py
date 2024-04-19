@@ -1,19 +1,16 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-import numpy as np
 
 from tqdm.notebook import tqdm
 
 import os
-from shutil import copyfile
 
 from model.Discriminator import Discriminator
 from model.GANLoss import GANLoss
 from model.Unet import Unet
-from model.logger import Logger
+from model.logger import Logger, LossGatherer
 
-from data.ImagesDataset import tensor_to_image
+from data.ImagesDataset import tensor_to_image, gray_to_tensor
 
 
 SAVE_PATH = "results"
@@ -21,7 +18,7 @@ SAVE_PATH = "results"
 class Painter(nn.Module):
 	""" GAN architecture with Unet generator """
 
-	def __init__(self, name:str, hyparams, load=False, load_pretrain=False, device=None):
+	def __init__(self, name:str, lr_d=2e-4, lr_g=2e-4, lr_pre=1e-4, load=False, load_pretrain=False, device=None):
 		super(Painter, self).__init__()
 
 		self.name = name
@@ -29,6 +26,7 @@ class Painter(nn.Module):
 
 		self.gan_criterion = GANLoss(device)
 		self.l1_criterion = nn.L1Loss()
+		self.lmbda = 100.
 
 		if load: self.load(load_pretrain)
 		else:
@@ -40,18 +38,21 @@ class Painter(nn.Module):
 			self.generator.apply(weights_init)
 			self.discriminator.apply(weights_init)
 
-		self.pre_optimizer = torch.optim.Adam(self.generator.parameters(), lr=hyparams.lr_pre)
-		self.optimizer_g = torch.optim.Adam(self.generator.parameters(), lr=hyparams.lr_g, betas=(0.5,0.999))
-		self.optimizer_d = torch.optim.Adam(self.discriminator.parameters(), lr=hyparams.lr_d, betas=(0.5,0.999))
+		self.pre_optimizer = torch.optim.Adam(self.generator.parameters(), lr=lr_pre)
+		self.optimizer_g = torch.optim.Adam(self.generator.parameters(), lr=lr_g, betas=(0.5,0.999))
+		self.optimizer_d = torch.optim.Adam(self.discriminator.parameters(), lr=lr_d, betas=(0.5,0.999))
 
 
 	def paint(self, gray_image):
 		""" Gets grayscale image, returns painted image """
 		
 		self.generator.eval()
-		gray_tensor = torch.tensor([gray_image], dtype=torch.float32, device=self.device)
-		lab_image = torch.cat((gray_tensor, self.generator(gray_tensor)), dim=0)
-		return tensor_to_image(lab_image)
+		with torch.no_grad():
+			l = gray_to_tensor(gray_image).to(self.device)
+			l_bat = torch.reshape(l, (1, l.size(0), l.size(1), l.size(2)))	# convert to "batch"
+			ab = self.generator(l_bat)[0]
+			lab_tensor = torch.cat((l, ab), dim=0)
+		return tensor_to_image(lab_tensor)
 
 
 	def optimize_discriminator(self, real_images, fake_images) -> float:
@@ -68,12 +69,13 @@ class Painter(nn.Module):
 		loss_real = self.gan_criterion(real_preds, real_data=True)
 
 		loss = (loss_fake + loss_real) * 0.5
+
 		loss.backward()
-		
 		self.optimizer_d.step()
-		return loss.item()
+
+		return (loss_fake, loss_real)
 	
-	def optimize_generator(self, fake_images) -> float:
+	def optimize_generator(self, fake_images, fake_ab_batch, ab_batch) -> float:
 		""" Do a gradient step for generator, return loss """
 
 		self.discriminator.set_gradients(False)
@@ -81,19 +83,22 @@ class Painter(nn.Module):
 		self.optimizer_g.zero_grad()
 
 		fake_preds = self.discriminator(fake_images)
-		loss = self.gan_criterion(fake_preds, real_data=True)
-		loss.backward()
+		loss_gan = self.gan_criterion(fake_preds, real_data=True)
+		loss_l1 = self.l1_criterion(fake_ab_batch, ab_batch) * self.lmbda
+		
+		loss = loss_gan + loss_l1
 
+		loss.backward()
 		self.optimizer_g.step()
-		return loss.item()
+
+		return (loss_gan, loss_l1)
 	
 
 	def train_model(self, trainloader) -> tuple[float,float]:
 		""" Trains model for 1 epoch, returns average loss for generator and discriminator """
 
-		self.generator.train()	# maybe needs to be eval when generating fake images for discriminator
-		sum_g_loss = 0.
-		sum_d_loss = 0.
+		self.generator.train()
+		loss_gatherer = LossGatherer(len(trainloader))
 
 		for l_batch, ab_batch in tqdm(trainloader, desc='Train'):
 
@@ -102,18 +107,20 @@ class Painter(nn.Module):
 			fake_ab_batch = self.generator(l_batch)
 			fake_images = torch.cat((l_batch, fake_ab_batch), dim=1)
 			
-			sum_d_loss += self.optimize_discriminator(real_images, fake_images.detach())
-			sum_g_loss += self.optimize_generator(fake_images)
+			loss_fake, loss_real = self.optimize_discriminator(real_images, fake_images.detach())
+			loss_gan, loss_l1 = self.optimize_generator(fake_images, fake_ab_batch, ab_batch)
 
-		return sum_g_loss / len(trainloader), sum_d_loss / len(trainloader)
+			loss_gatherer(loss_fake, loss_real, loss_gan, loss_l1)
 
-	def test_model(self, testloader, pretrain=False):
-		""" Tests model on testset, returns average loss for generator and discriminator """
+		self.logger.after_epoch(loss_gatherer)
+
+	def test_model(self, testloader, pretrain=False, log=False):
+		""" Tests model on testset, returns losses """
 
 		self.generator.eval()
 		self.discriminator.eval()
-		sum_g_loss = 0.
-		sum_d_loss = 0.
+		sum_pre_loss = 0.
+		loss_gatherer = LossGatherer(len(testloader))
 
 		with torch.no_grad():
 			for l_batch, ab_batch in tqdm(testloader, desc='Test'):
@@ -125,25 +132,23 @@ class Painter(nn.Module):
 				self.logger.add_images(real_images, fake_images)
 
 				# get losses
+				loss_l1 = self.l1_criterion(fake_ab_batch, ab_batch).item()
 				if pretrain:
-					sum_g_loss += self.l1_criterion(fake_images, real_images).item()
+					sum_pre_loss += loss_l1
 				else:
 					fake_preds = self.discriminator(fake_images)
 					real_preds = self.discriminator(real_images)
 
-					g_loss = self.gan_criterion(fake_preds, real_data=True)
-					sum_g_loss += g_loss.item()
-
 					loss_fake = self.gan_criterion(fake_preds, real_data=False)
 					loss_real = self.gan_criterion(real_preds, real_data=True)
+					loss_gan = self.gan_criterion(fake_preds, real_data=True)
 
-					loss = (loss_fake + loss_real) * 0.5
-					sum_d_loss += loss.item()
+					loss_gatherer(loss_fake, loss_real, loss_gan, (loss_l1 * self.lmbda))
 
-		if pretrain: losses = sum_g_loss / len(testloader)
-		else: losses = (sum_g_loss / len(testloader), sum_d_loss / len(testloader))
+		if log and not pretrain: self.logger.after_epoch(loss_gatherer, train=False)
 
-		return losses
+		if pretrain: return sum_pre_loss / len(testloader)
+		if not log: return loss_gatherer.get_losses()
 
 	def pretrain_generator(self, trainloader) -> None:
 		self.generator.train()
@@ -151,12 +156,9 @@ class Painter(nn.Module):
 
 		for l_batch, ab_batch in tqdm(trainloader, desc='Train'):
 
-			# get real and fake images
-			real_images = torch.cat((l_batch, ab_batch), dim=1)
 			fake_ab_batch = self.generator(l_batch)
-			fake_images = torch.cat((l_batch, fake_ab_batch), dim=1)
 			
-			loss = self.l1_criterion(fake_images, real_images)
+			loss = self.l1_criterion(fake_ab_batch, ab_batch)
 			self.pre_optimizer.zero_grad()
 			loss.backward()
 			self.pre_optimizer.step()
@@ -196,7 +198,7 @@ class Painter(nn.Module):
 		self.discriminator.set_gradients(True)
 		d_pcount = sum(p.numel() for p in self.discriminator.parameters() if p.requires_grad)
 
-		return g_pcount + d_pcount
+		return g_pcount, d_pcount
 
 def weights_init(m):
 		classname = m.__class__.__name__

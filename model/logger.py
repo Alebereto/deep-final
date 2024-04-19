@@ -7,6 +7,30 @@ import cv2
 
 SAVE_PATH = "results"
 
+class LossGatherer():
+	def __init__(self, batch_count) -> None:
+		""" Used to gather losses during training and testing epochs """
+
+		self.batch_count = batch_count
+		
+		self.sum_loss_fake, self.sum_loss_real = 0., 0.		# discriminator losses
+		self.sum_gan_loss, self.sum_l1_loss = 0., 0.		# generator losses
+
+	def __call__(self, loss_fake, loss_real, loss_gan, loss_l1) -> None:
+		self.sum_loss_fake += loss_fake
+		self.sum_loss_real += loss_real
+		self.sum_gan_loss += loss_gan
+		self.sum_l1_loss += loss_l1
+
+	def get_losses(self):
+		loss_fake = self.sum_loss_fake / self.batch_count
+		loss_real = self.sum_loss_real / self.batch_count
+		gan_loss = self.sum_gan_loss / self.batch_count
+		l1_loss = self.sum_l1_loss / self.batch_count
+
+		return (loss_fake, loss_real, gan_loss, l1_loss)
+	
+
 class Logger():
 	""" Class containing information of model, such as layer dimensions
 	 	or training stats. Also has functions for plots and debugging. """
@@ -16,21 +40,26 @@ class Logger():
 
 		self.pretrain_loss = list()	# (train, test) tuples
 
-		self.train_loss = list()	# (generator, discriminator) tuples
-		self.test_loss = list()		# (generator, discriminator) tuples
+		# self.train_loss = list()	# (generator, discriminator) tuples # ===============================================================
+		# self.test_loss = list()		# (generator, discriminator) tuples
 
 		self.recent_images = deque(maxlen=5) # tuples of (colored, fake) as tensors
 		
 		self.epochs_pretrained = 0
 		self.epochs_trained = 0
 
-	def after_epoch(self, train_loss, test_loss) -> None:
+	def after_epoch(self, loss_gatherer:LossGatherer, train:bool) -> None:
 		""" Update values after epoch """
 
 		self.epochs_trained += 1
 
-		self.train_loss.append(train_loss)
-		self.test_loss.append(test_loss)
+		loss_fake, loss_real, gan_loss, l1_loss = loss_gatherer.get_losses()
+		if train:
+			# add to train losses # ===============================================================
+			pass
+		else:
+			# add to test losses
+			pass
 
 	def after_pretrain(self, train_loss, test_loss) -> None:
 		""" Update values after pretrain epoch """
@@ -60,7 +89,7 @@ class Logger():
 			g_train_loss, d_train_loss = zip(*self.train_loss)
 			g_test_loss, d_test_loss = zip(*self.test_loss)
 
-			plt.subplot(121)
+			plt.subplot(211)
 
 		plt.plot(x, g_train_loss, color='c', label='Train loss')
 		plt.plot(x, g_test_loss, color='g', label='Test loss')
@@ -70,7 +99,7 @@ class Logger():
 		plt.legend()
 
 		if not pretrain:
-			plt.subplot(122)
+			plt.subplot(212)
 			plt.plot(x, d_train_loss, color='c', label='Train loss')
 			plt.plot(x, d_test_loss, color='g', label='Test loss')
 			plt.xlabel('Epoch')
@@ -121,4 +150,7 @@ class Logger():
 			model_path = os.path.join(SAVE_PATH, self.name)
 			plt.savefig(os.path.join(model_path, 'coloring.png'))
 		plt.close()
+
+	def print_epoch(self, idx=-1) -> None:
+		print('A')	# ===============================================================
 

@@ -7,7 +7,7 @@ class Discriminator(nn.Module):
 	def __init__(self):
 		super(Discriminator, self).__init__()
 		input = 3
-		filters = 64
+		filters = 32
 		self.main = nn.Sequential(
 			nn.Conv2d(input, filters, 6, 2, 1, bias=False),
 			nn.LeakyReLU(0.2, inplace=True),
