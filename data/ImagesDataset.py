@@ -15,9 +15,8 @@ import warnings
 
 
 class ImagesDataset(Dataset):
-	def __init__(self, data_paths: list[str], foods:list[str], device):
+	def __init__(self, data_paths: list[str], device):
 		self.paths = data_paths
-		self.foods = foods
 		self.device = device
 		self.transform = transforms.Resize((256, 256),  Image.BICUBIC)
 		self.toTensor = transforms.ToTensor()
@@ -46,36 +45,18 @@ class ImagesDataset(Dataset):
 		print()
 
 
-def create_datasets(data_path: str, train_size: int, test_size: int, n_labels=25, food_list=None, seed=None, device=None) -> tuple[ImagesDataset, ImagesDataset]:
+def create_datasets(data_path: str, train_size: int, test_size: int, seed=None, device=None) -> tuple[ImagesDataset, ImagesDataset]:
 	""" Returns train and test datasets """
 
+	paths = glob(os.path.join(data_path, '**\*.jpg')) # get paths to all images (jpg)
+
+	assert train_size + test_size < len(paths), "Not enough data for specified sizes"
+
 	if seed is not None: random.seed(seed)
+	random.shuffle(paths)
+	train_paths, test_paths = paths[:train_size], paths[(len(paths)-test_size):]
 
-	if food_list is None:
-		all_foods = os.listdir(data_path)
-		foods = random.choices(all_foods, k=n_labels)
-	else:
-		with open('data\\food_list.txt', 'r') as file:
-			foods = file.read().split('\n')
-		n_labels = len(foods)
-
-	img_paths_train = list()
-	img_paths_test = list()
-
-	train_count = train_size // n_labels
-	test_count = test_size // n_labels
-
-	assert train_count + test_count <= 500, "Not enough data for specified sizes"
-
-	for food in foods:
-		dr = f'{data_path}\\{food}'
-		paths = glob(f'{dr}\\*.jpg')
-		random.shuffle(paths)
-		train_paths, test_paths = paths[:train_count], paths[(len(paths)-test_count):]
-		for path in train_paths: img_paths_train.append(path)
-		for path in test_paths:  img_paths_test.append(path)
-
-	return ImagesDataset(img_paths_train, foods, device), ImagesDataset(img_paths_test, foods, device)
+	return ImagesDataset(train_paths, device), ImagesDataset(test_paths, device)
 
 def tensor_to_image(tensor:torch.Tensor) -> np.ndarray:
 	""" gets normalized lab image as tensor, returns rgb image as numpy array """
