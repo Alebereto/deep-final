@@ -40,7 +40,6 @@ class ImagesDataset(Dataset):
 	
 	def print_stats(self):
 		print('=====Dataset Stats=====')
-		print(f'Food count: {len(self.foods)}')
 		print(f'Image count: {len(self.paths)}')
 		print()
 
