@@ -8,27 +8,41 @@ import cv2
 SAVE_PATH = "results"
 
 class LossGatherer():
-	def __init__(self, batch_count) -> None:
+	def __init__(self) -> None:
 		""" Used to gather losses during training and testing epochs """
 
-		self.batch_count = batch_count
+		self.trained_d = 0
+		self.trained_g = 0
 		
 		self.sum_loss_fake, self.sum_loss_real = 0., 0.		# discriminator losses
 		self.sum_gan_loss, self.sum_l1_loss = 0., 0.		# generator losses
 
+		self.sum_loss_d, self.sum_loss_g = 0., 0.
+
 	def __call__(self, loss_fake, loss_real, loss_gan, loss_l1) -> None:
-		self.sum_loss_fake += loss_fake
-		self.sum_loss_real += loss_real
-		self.sum_gan_loss += loss_gan
-		self.sum_l1_loss += loss_l1
+		if loss_fake is not None and loss_real is not None:
+			self.sum_loss_fake += loss_fake
+			self.sum_loss_real += loss_real
+
+			self.sum_loss_d += loss_fake + loss_real
+			self.trained_d += 1
+		if loss_fake is not None and loss_real is not None:
+			self.sum_gan_loss += loss_gan
+			self.sum_l1_loss += loss_l1
+
+			self.sum_loss_g += loss_gan + loss_l1
+			self.trained_g += 1
 
 	def get_losses(self):
-		loss_fake = self.sum_loss_fake / self.batch_count
-		loss_real = self.sum_loss_real / self.batch_count
-		gan_loss = self.sum_gan_loss / self.batch_count
-		l1_loss = self.sum_l1_loss / self.batch_count
+		loss_fake = self.sum_loss_fake / self.trained_d
+		loss_real = self.sum_loss_real / self.trained_d
+		gan_loss = self.sum_gan_loss / self.trained_g
+		l1_loss = self.sum_l1_loss / self.trained_g
 
-		return (loss_fake, loss_real, gan_loss, l1_loss)
+		loss_d = self.sum_loss_d / self.trained_d
+		loss_g = self.sum_loss_g / self.trained_g
+
+		return (loss_fake, loss_real, gan_loss, l1_loss, loss_d, loss_g)
 	
 
 class Logger():
@@ -40,10 +54,10 @@ class Logger():
 
 		self.pretrain_loss = list()	# (train, test) tuples
 
-		self.train_losses = list()	# (loss_fake, loss_real, gan_loss, l1_loss) tuples
-		self.test_losses = list()	# (loss_fake, loss_real, gan_loss, l1_loss) tuples
+		self.train_losses = list()	# (loss_fake, loss_real, gan_loss, l1_loss, loss_d, loss_g) tuples
+		self.test_losses = list()	# (loss_fake, loss_real, gan_loss, l1_loss, loss_d, loss_g) tuples
 
-		self.recent_images = deque(maxlen=5) # tuples of (colored, fake) as lab tensors
+		self.recent_images = deque(maxlen=6) # tuples of (colored, fake) as lab tensors
 		
 		self.epochs_pretrained = 0
 		self.epochs_trained = 0
@@ -69,7 +83,7 @@ class Logger():
 		""" gets batch of real images and fake images from test, saves some of them """
 
 		# get some images from batch
-		indeces = np.random.choice(len(real_images), size=5, replace=False)
+		indeces = np.random.choice(len(real_images), size=6, replace=False)
 		real_images, fake_images = real_images[indeces], fake_images[indeces]
 
 		for i in range(len(real_images)):
@@ -95,8 +109,11 @@ class Logger():
 			g_train_loss, g_test_loss = zip(*self.pretrain_loss)
 			plots.append((g_train_loss, g_test_loss, 'Pretrain Loss'))
 		else:
-			train_loss_fake, train_loss_real, train_gan_loss, train_l1_loss = zip(*self.train_losses)
-			test_loss_fake, test_loss_real, test_gan_loss, test_l1_loss = zip(*self.test_losses)
+			train_loss_fake, train_loss_real, train_gan_loss, train_l1_loss, train_loss_d, train_loss_g = zip(*self.train_losses)
+			test_loss_fake, test_loss_real, test_gan_loss, test_l1_loss, test_loss_d, test_loss_g = zip(*self.test_losses)
+
+			plots.append((train_loss_d, test_loss_d, 'Discriminator Loss'))
+			plots.append((train_loss_g, test_loss_g, 'Generator Loss'))
 
 			plots.append((train_loss_fake, test_loss_fake, 'Discriminator Fake Loss'))
 			plots.append((train_loss_real, test_loss_real, 'Discriminator Real Loss'))
@@ -150,14 +167,14 @@ class Logger():
 		plt.close()
 
 	def print_epoch(self, idx=-1) -> None:
-		train_loss_fake, train_loss_real, train_gan_loss, train_l1_loss = self.train_losses[idx]
-		test_loss_fake, test_loss_real, test_gan_loss, test_l1_loss = self.test_losses[idx]
+		train_loss_fake, train_loss_real, train_gan_loss, train_l1_loss, train_loss_d, train_loss_g = self.train_losses[idx]
+		test_loss_fake, test_loss_real, test_gan_loss, test_l1_loss, test_loss_d, test_loss_g = self.test_losses[idx]
 
 		print('=====Train Losses=====')
-		print(f'Discriminator Loss: {(train_loss_fake + train_loss_real) * 0.5 :.6f}, (Fake={train_loss_fake:.6f}), (Real={train_loss_real:.6f})')
-		print(f'Generator Loss: {train_gan_loss + train_l1_loss :.6f}, (GAN={train_gan_loss:.6f}), (L1={train_l1_loss:.6f})')
+		print(f'Discriminator Loss: {train_loss_d :.6f}, (Fake={train_loss_fake:.6f}), (Real={train_loss_real:.6f})')
+		print(f'Generator Loss: {train_loss_g :.6f}, (GAN={train_gan_loss:.6f}), (L1={train_l1_loss:.6f})')
 
-		print('=====Test Losses=====')
-		print(f'Discriminator Loss: {(test_loss_fake + test_loss_real) * 0.5 :.6f}, (Fake={test_loss_fake:.6f}), (Real={test_loss_real:.6f})')
-		print(f'Generator Loss: {test_gan_loss + test_l1_loss :.6f}, (GAN={test_gan_loss:.6f}), (L1={test_l1_loss:.6f})')
+		print('-----Test Losses-----')
+		print(f'Discriminator Loss: {test_loss_d :.6f}, (Fake={test_loss_fake:.6f}), (Real={test_loss_real:.6f})')
+		print(f'Generator Loss: {test_loss_g :.6f}, (GAN={test_gan_loss:.6f}), (L1={test_l1_loss:.6f})')
 

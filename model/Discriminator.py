@@ -9,7 +9,7 @@ class Discriminator(nn.Module):
 		input = 3
 		filters = 32
 		self.main = nn.Sequential(
-			nn.Conv2d(input, filters, 6, 2, 1, bias=False),
+			nn.Conv2d(input, filters, 6, 2, 1),
 			nn.LeakyReLU(0.2, inplace=True),
 
 			nn.Conv2d(filters, (filters * 2), 6, 2, 1, bias=False),
@@ -28,7 +28,7 @@ class Discriminator(nn.Module):
 			nn.BatchNorm2d(filters * 8),
 			nn.LeakyReLU(0.2, inplace=True),
 
-			nn.Conv2d((filters * 8), 1, 6, 1, 0, bias=False),
+			nn.Conv2d((filters * 8), 1, 6, 1, 0),
 			nn.Sigmoid()
 		)
 

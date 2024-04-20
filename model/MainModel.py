@@ -18,7 +18,7 @@ SAVE_PATH = "results"
 class Painter(nn.Module):
 	""" GAN architecture with Unet generator """
 
-	def __init__(self, name:str, lr_d=2e-4, lr_g=2e-4, lr_pre=1e-4, load=False, load_pretrain=False, device=None):
+	def __init__(self, name:str, lr_d=1e-4, lr_g=2e-4, lr_pre=1e-4, load=False, load_pretrain=False, device=None):
 		super(Painter, self).__init__()
 
 		self.name = name
@@ -55,33 +55,39 @@ class Painter(nn.Module):
 		return tensor_to_image(lab_tensor)
 
 
-	def optimize_discriminator(self, real_images, fake_images) -> float:
+	def optimize_discriminator(self, l_batch, ab_batch, fake_ab_batch, threshold=float('-inf')) -> float:
 		""" Do a gradient step for discriminator, return loss """
 
 		self.discriminator.set_gradients(True)
 		self.discriminator.train()
 		self.optimizer_d.zero_grad()
-		
+
+		fake_images = torch.cat((l_batch, fake_ab_batch), dim=1).detach()
+		real_images = torch.cat((l_batch, ab_batch), dim=1)
+
 		fake_preds = self.discriminator(fake_images)
 		loss_fake = self.gan_criterion(fake_preds, real_data=False)
 
 		real_preds = self.discriminator(real_images)
 		loss_real = self.gan_criterion(real_preds, real_data=True)
 
-		loss = (loss_fake + loss_real) * 0.5
+		loss = loss_fake + loss_real
 
-		loss.backward()
-		self.optimizer_d.step()
+		if loss.item() > threshold:
+			loss.backward()
+			self.optimizer_d.step()
 
 		return (loss_fake.item(), loss_real.item())
 	
-	def optimize_generator(self, fake_images, fake_ab_batch, ab_batch) -> float:
+	def optimize_generator(self, l_batch, ab_batch, fake_ab_batch) -> float:
 		""" Do a gradient step for generator, return loss """
 
 		self.discriminator.set_gradients(False)
+		for p in self.discriminator.parameters(): assert not p.requires_grad	# ------------------------
 		self.discriminator.eval()
 		self.optimizer_g.zero_grad()
 
+		fake_images = torch.cat((l_batch, fake_ab_batch), dim=1)
 		fake_preds = self.discriminator(fake_images)
 		loss_gan = self.gan_criterion(fake_preds, real_data=True)
 		loss_l1 = self.l1_criterion(fake_ab_batch, ab_batch) * self.lmbda
@@ -95,20 +101,29 @@ class Painter(nn.Module):
 	
 
 	def train_model(self, trainloader) -> tuple[float,float]:
-		""" Trains model for 1 epoch, returns average loss for generator and discriminator """
+		""" Trains model for 1 epoch """
 
 		self.generator.train()
-		loss_gatherer = LossGatherer(len(trainloader))
+		loss_gatherer = LossGatherer()
 
 		for l_batch, ab_batch in tqdm(trainloader, desc='Train'):
 
-			# get real and fake images
-			real_images = torch.cat((l_batch, ab_batch), dim=1)
-			fake_ab_batch = self.generator(l_batch)
-			fake_images = torch.cat((l_batch, fake_ab_batch), dim=1)
-			
-			loss_fake, loss_real = self.optimize_discriminator(real_images, fake_images.detach())
-			loss_gan, loss_l1 = self.optimize_generator(fake_images, fake_ab_batch, ab_batch)
+			loss_fake, loss_real, loss_gan, loss_l1 = None, None, None, None
+
+			# decide if to train optimizer or generator
+			train_d = True
+			train_g = True
+
+			# get fake colors
+			if train_g:
+				fake_ab_batch = self.generator(l_batch)
+			else:
+				with torch.no_grad(): fake_ab_batch = self.generator(l_batch)
+
+			if train_d:
+				loss_fake, loss_real = self.optimize_discriminator(l_batch, ab_batch, fake_ab_batch, threshold=0.3)
+			if train_g:
+				loss_gan, loss_l1 = self.optimize_generator(l_batch, ab_batch, fake_ab_batch)
 
 			loss_gatherer(loss_fake, loss_real, loss_gan, loss_l1)
 
@@ -120,7 +135,7 @@ class Painter(nn.Module):
 		self.generator.eval()
 		self.discriminator.eval()
 		sum_pre_loss = 0.
-		loss_gatherer = LossGatherer(len(testloader))
+		loss_gatherer = LossGatherer()
 
 		with torch.no_grad():
 			for l_batch, ab_batch in tqdm(testloader, desc='Test'):
@@ -151,6 +166,8 @@ class Painter(nn.Module):
 		if not log: return loss_gatherer.get_losses()
 
 	def pretrain_generator(self, trainloader) -> None:
+		""" Pretrains generator for 1 epoch """
+
 		self.generator.train()
 		sum_loss = 0
 
@@ -191,6 +208,7 @@ class Painter(nn.Module):
 		self.generator.load_state_dict(g_weights)
 		self.discriminator = Discriminator().to(self.device)
 		if not pretrain: self.discriminator.load_state_dict(d_weights)
+		else: self.discriminator.apply(weights_init)
 
 
 	def count_parameters(self):
@@ -204,6 +222,8 @@ def weights_init(m):
 		classname = m.__class__.__name__
 		if hasattr(m, 'weight') and 'Conv' in classname:
 			nn.init.normal_(m.weight.data, mean=0.0, std=0.02)
+			if hasattr(m, 'bias') and m.bias is not None:
+				nn.init.constant_(m.bias.data, 0.0)
 		elif 'BatchNorm2d' in classname:
 			nn.init.normal_(m.weight.data, mean=1.0, std=0.02)
 			nn.init.constant_(m.bias.data, 0.)

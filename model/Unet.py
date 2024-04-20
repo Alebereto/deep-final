@@ -69,9 +69,9 @@ class Unet(nn.Module):
         self.convDown1 = UnetDown(filters, filters*2)
         self.convDown2 = UnetDown(filters*2, filters*4)
         self.convDown3 = UnetDown(filters*4, filters*8)
-        self.convDown4 = UnetDown(filters*8, filters*16)
+        # self.convDown4 = UnetDown(filters*8, filters*16)
         
-        self.convUp4 = UnetUp(filters*16, filters*8)
+        # self.convUp4 = UnetUp(filters*16, filters*8)
         self.convUp3 = UnetUp(filters*8, filters*4)
         self.convUp2 = UnetUp(filters*4, filters*2)
         self.convUp1 = UnetUp(filters*2, filters)
@@ -86,10 +86,10 @@ class Unet(nn.Module):
         x2 = self.convDown1(x1)
         x3 = self.convDown2(x2)
         x4 = self.convDown3(x3)
-        x5 = self.convDown4(x4)
+        # x5 = self.convDown4(x4)
         
-        x = self.convUp4(x5, x4)
-        x = self.convUp3(x, x3)
+        # x = self.convUp4(x5, x4)
+        x = self.convUp3(x4, x3)
         x = self.convUp2(x, x2)
         x = self.convUp1(x, x1)
         
