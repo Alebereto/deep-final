@@ -211,7 +211,7 @@ class Painter(nn.Module):
 		model_path = os.path.join(SAVE_PATH, self.name)
 		assert os.path.isdir(model_path), f'Model with name "{self.name}" does not exist in path'
 
-		logger, g_weights, d_weights = torch.load(os.path.join(model_path, data_name))
+		logger, g_weights, d_weights = torch.load(os.path.join(model_path, data_name), map_location=self.device)
 		self.logger = logger
 		logger.name = self.name
 
