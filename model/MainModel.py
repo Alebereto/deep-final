@@ -73,11 +73,15 @@ class Painter(nn.Module):
 
 		loss = loss_fake + loss_real
 
-		if loss.item() > threshold:
+		with torch.no_grad():
+			avg_accuracy = (torch.sum(1-fake_preds) + torch.sum(real_preds)) / (len(l_batch)*2)
+
+		# if loss.item() > threshold:
+		if avg_accuracy < threshold:
 			loss.backward()
 			self.optimizer_d.step()
 
-		return (loss_fake.item(), loss_real.item())
+		return (loss_fake.item(), loss_real.item(), avg_accuracy.item())
 	
 	def optimize_generator(self, l_batch, ab_batch, fake_ab_batch) -> float:
 		""" Do a gradient step for generator, return loss """
@@ -121,11 +125,11 @@ class Painter(nn.Module):
 				with torch.no_grad(): fake_ab_batch = self.generator(l_batch)
 
 			if train_d:
-				loss_fake, loss_real = self.optimize_discriminator(l_batch, ab_batch, fake_ab_batch, threshold=0.3)
+				loss_fake, loss_real, avg_accuracy = self.optimize_discriminator(l_batch, ab_batch, fake_ab_batch, threshold=0.7)
 			if train_g:
 				loss_gan, loss_l1 = self.optimize_generator(l_batch, ab_batch, fake_ab_batch)
 
-			loss_gatherer(loss_fake, loss_real, loss_gan, loss_l1)
+			loss_gatherer(loss_fake, loss_real, loss_gan, loss_l1, avg_accuracy)
 
 		self.logger.after_epoch(loss_gatherer, train=True)
 
