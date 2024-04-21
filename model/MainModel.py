@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import numpy as np
 
 from tqdm.notebook import tqdm
 
@@ -11,6 +12,8 @@ from model.Unet import Unet
 from model.logger import Logger, LossGatherer
 
 from data.ImagesDataset import tensor_to_image, gray_to_tensor
+from PIL import Image
+from torchvision import transforms
 
 
 SAVE_PATH = "results"
@@ -20,6 +23,7 @@ class Painter(nn.Module):
 
 	def __init__(self, name:str, lr_d=1e-4, lr_g=2e-4, lr_pre=1e-4, load=False, load_pretrain=False, device=None):
 		super(Painter, self).__init__()
+		if device is None: device = torch.device('cpu')
 
 		self.name = name
 		self.device = device
@@ -43,16 +47,30 @@ class Painter(nn.Module):
 		self.optimizer_d = torch.optim.Adam(self.discriminator.parameters(), lr=lr_d, betas=(0.5,0.999))
 
 
-	def paint(self, gray_image):
+	def paint(self, gray_image: np.ndarray):
 		""" Gets grayscale image, returns painted image """
+
+		# Create transforms to resize image to neatest multiple of 8
+		og_shape = gray_image.shape
+		new_shape = round_shape(og_shape, 8)
+
+		transform_new = transforms.Resize(new_shape,  Image.BICUBIC)
+		transform_og = transforms.Resize(og_shape,  Image.BICUBIC)
+
+		gray_image = np.array(transform_new(Image.fromarray(gray_image, "L")))	# resize to new shape
 		
+		# paint image
 		self.generator.eval()
 		with torch.no_grad():
 			l = gray_to_tensor(gray_image).to(self.device)
 			l_bat = torch.reshape(l, (1, l.size(0), l.size(1), l.size(2)))	# convert to "batch"
 			ab = self.generator(l_bat)[0]
 			lab_tensor = torch.cat((l, ab), dim=0)
-		return tensor_to_image(lab_tensor)
+		img = tensor_to_image(lab_tensor)
+
+		img = np.array(transform_og(Image.fromarray(img, "RGB")))	# resize to original shape
+
+		return img
 
 
 	def optimize_discriminator(self, l_batch, ab_batch, fake_ab_batch, threshold=float('-inf')) -> float:
@@ -112,22 +130,11 @@ class Painter(nn.Module):
 
 		for l_batch, ab_batch in tqdm(trainloader, desc='Train'):
 
-			loss_fake, loss_real, loss_gan, loss_l1 = None, None, None, None
-
-			# decide if to train optimizer or generator
-			train_d = True
-			train_g = True
-
 			# get fake colors
-			if train_g:
-				fake_ab_batch = self.generator(l_batch)
-			else:
-				with torch.no_grad(): fake_ab_batch = self.generator(l_batch)
+			fake_ab_batch = self.generator(l_batch)
 
-			if train_d:
-				loss_fake, loss_real, avg_accuracy = self.optimize_discriminator(l_batch, ab_batch, fake_ab_batch, threshold=0.7)
-			if train_g:
-				loss_gan, loss_l1 = self.optimize_generator(l_batch, ab_batch, fake_ab_batch)
+			loss_fake, loss_real, avg_accuracy = self.optimize_discriminator(l_batch, ab_batch, fake_ab_batch, threshold=0.7)
+			loss_gan, loss_l1 = self.optimize_generator(l_batch, ab_batch, fake_ab_batch)
 
 			loss_gatherer(loss_fake, loss_real, loss_gan, loss_l1, avg_accuracy)
 
@@ -223,6 +230,8 @@ class Painter(nn.Module):
 		return g_pcount, d_pcount
 
 def weights_init(m):
+		""" init weights of generator and discriminator """
+
 		classname = m.__class__.__name__
 		if hasattr(m, 'weight') and 'Conv' in classname:
 			nn.init.normal_(m.weight.data, mean=0.0, std=0.02)
@@ -232,3 +241,9 @@ def weights_init(m):
 			nn.init.normal_(m.weight.data, mean=1.0, std=0.02)
 			nn.init.constant_(m.bias.data, 0.)
 
+def round_shape(tup: tuple[int], c: int) -> tuple[int]:
+	""" Used to find nearest multiple of 8 for image size to fit Unet """
+
+	arr = np.array(tup)
+	new_shape = (c * np.ceil((2 * arr - c) / (2 * c))).astype(int)
+	return tuple(new_shape)
