@@ -39,11 +39,11 @@ class ImagesDataset(Dataset):
 
 		return l, ab
 
-	def copy_dataset(self, dest:str):
-		""" copies all images in dataset to dest location """
+	# def copy_dataset(self, dest:str):
+	# 	""" copies all images in dataset to dest location """
 
-		for i, path in enumerate(self.paths):
-			copyfile(path, f'{dest}\\{i+1}.jpg')
+	# 	for i, path in enumerate(self.paths):
+	# 		copyfile(path, f'{dest}\\{i+1}.jpg')
 	
 	def print_stats(self):
 		print('=====Dataset Stats=====')
@@ -51,16 +51,23 @@ class ImagesDataset(Dataset):
 		print()
 
 
-def create_datasets(data_path: str, train_size: int, test_size: int, seed=None, device=None) -> tuple[ImagesDataset, ImagesDataset]:
+def create_datasets(data_path: str, train_size: int, test_size: int, preset=False, seed=None, device=None) -> tuple[ImagesDataset, ImagesDataset]:
 	""" Returns train and test datasets """
 
-	paths = glob(os.path.join(data_path, '**\*.jpg')) # get paths to all images (jpg)
+	if preset:
+		train_paths = glob(f'{data_path}\\train\\*.jpg')
+		test_paths = glob(f'{data_path}\\test\\*.jpg')
 
-	assert train_size + test_size < len(paths), "Not enough data for specified sizes"
+	else:
+		DATA_NAME = "food"
 
-	if seed is not None: random.seed(seed)
-	random.shuffle(paths)
-	train_paths, test_paths = paths[:train_size], paths[(len(paths)-test_size):]
+		paths = glob(f'{data_path}\\{DATA_NAME}\\**\\*.jpg') # get paths to all images (jpg)
+
+		assert train_size + test_size < len(paths), "Not enough data for specified sizes"
+
+		if seed is not None: random.seed(seed)
+		random.shuffle(paths)
+		train_paths, test_paths = paths[:train_size], paths[(len(paths)-test_size):]
 
 	return ImagesDataset(train_paths, device), ImagesDataset(test_paths, device)
 
@@ -79,7 +86,7 @@ def tensor_to_image(tensor:torch.Tensor) -> np.ndarray:
 	return np.clip(img, a_min=0, a_max=255).astype(np.uint8)
 
 def gray_to_tensor(img) -> torch.Tensor:
-	""" gets grayscale image, returns notmalized lab tensor """
+	""" gets grayscale image, returns normalized lab tensor """
 
 	toTensor = transforms.ToTensor()
 
@@ -90,6 +97,6 @@ def gray_to_tensor(img) -> torch.Tensor:
 	return l
 
 def add_noise(tensor: torch.Tensor, std=0.04, mean=0.) -> torch.Tensor:
-	noised = tensor + torch.randn(tensor.size(), device=(tensor.get_device())) * std + mean
+	noised = tensor + torch.randn(tensor.size(), device=(tensor.device)) * std + mean
 	return torch.clamp(noised, min=-1, max=1)
 
