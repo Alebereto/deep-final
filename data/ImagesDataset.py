@@ -5,6 +5,7 @@ from torch.utils.data import Dataset
 from torchvision import transforms
 
 from glob import glob
+from shutil import copyfile
 import os
 import random
 
@@ -37,6 +38,12 @@ class ImagesDataset(Dataset):
 		ab = img[[1,2],...] / 110.	# Get normalized ab channels (value range is (-107.8573, 100))
 
 		return l, ab
+
+	def copy_dataset(self, dest:str):
+		""" copies all images in dataset to dest location """
+
+		for i, path in enumerate(self.paths):
+			copyfile(path, f'{dest}\\{i+1}.jpg')
 	
 	def print_stats(self):
 		print('=====Dataset Stats=====')
